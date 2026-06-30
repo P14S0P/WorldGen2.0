@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.piasop.worldgen2.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "NoiseChunkMixin",
+    "NoiseBasedChunkGeneratorMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
