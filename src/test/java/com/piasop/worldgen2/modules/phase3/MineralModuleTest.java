@@ -41,4 +41,12 @@ class MineralModuleTest {
         assertEquals(first.id(), second.id());
         assertTrue(first.primaryMinY() <= first.primaryMaxY());
     }
+
+    @Test
+    void strataGateDependsOnBandAndSignals() {
+        MineralModule.MineralProfile profile = new MineralModule.MineralProfile("test", -20, 20, -50, -30);
+        assertTrue(module.shouldApplyStrataAt(0, profile, 0.95f, 0.90f, 0.9));
+        assertTrue(!module.shouldApplyStrataAt(90, profile, 0.95f, 0.90f, 0.9));
+        assertTrue(!module.shouldApplyStrataAt(0, profile, 0.20f, 0.10f, 0.1));
+    }
 }

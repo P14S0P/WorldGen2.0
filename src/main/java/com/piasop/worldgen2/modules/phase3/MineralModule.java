@@ -7,6 +7,12 @@ import com.piasop.worldgen2.api.WG2Module;
 import com.piasop.worldgen2.core.WG2Config;
 import com.piasop.worldgen2.core.WG2DataCache;
 import com.piasop.worldgen2.modules.phase1.Phase1Noise;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -15,6 +21,8 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class MineralModule implements WG2Module {
     private static final int REGION_SIZE = 32;
+    private static final int STRATA_MIN_Y = -56;
+    private static final int STRATA_MAX_Y = 70;
 
     private final RuinsModule ruins = new RuinsModule();
     private final ConcurrentHashMap<Long, MineralRegionData> regions = new ConcurrentHashMap<>();
@@ -125,6 +133,76 @@ public final class MineralModule implements WG2Module {
         int idx = index(localChunkX, localChunkZ, data.size());
         int paletteIdx = Byte.toUnsignedInt(data.layerProfile()[idx]);
         return data.palette()[Math.min(paletteIdx, data.palette().length - 1)];
+    }
+
+    public void applyMineralStrataToChunk(ChunkAccess chunk, long seed) {
+        ChunkPos chunkPos = chunk.getPos();
+        int minBuildY = chunk.getMinBuildHeight();
+        int maxBuildY = minBuildY + chunk.getHeight() - 1;
+        int baseX = chunkPos.getMinBlockX();
+        int baseZ = chunkPos.getMinBlockZ();
+
+        int minY = Math.max(minBuildY + 8, STRATA_MIN_Y);
+        int maxY = Math.min(maxBuildY - 4, STRATA_MAX_Y);
+        if (maxY <= minY) {
+            return;
+        }
+
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int localZ = 0; localZ < 16; localZ++) {
+            for (int localX = 0; localX < 16; localX++) {
+                int worldX = baseX + localX;
+                int worldZ = baseZ + localZ;
+                float richness = sampleRichness(worldX, worldZ, seed);
+                float deepBias = sampleDeepBandBias(worldX, worldZ, seed);
+                MineralProfile profile = sampleProfile(worldX, worldZ, seed);
+                BlockState target = profileToState(profile.id());
+
+                for (int y = minY; y <= maxY; y++) {
+                    cursor.set(worldX, y, worldZ);
+                    BlockState current = chunk.getBlockState(cursor);
+                    if (!isReplaceableHost(current.getBlock())) {
+                        continue;
+                    }
+
+                    double selector = (Phase1Noise.value2D(worldX * 0.032, (y * 0.041) + (worldZ * 0.017),
+                            seed + 30757L) + 1.0) * 0.5;
+                    if (!shouldApplyStrataAt(y, profile, richness, deepBias, selector)) {
+                        continue;
+                    }
+                    chunk.setBlockState(cursor, target, false);
+                }
+            }
+        }
+    }
+
+    boolean shouldApplyStrataAt(int y, MineralProfile profile, float richness, float deepBias, double selector) {
+        boolean inPrimary = y >= profile.primaryMinY() && y <= profile.primaryMaxY();
+        boolean inSecondary = y >= profile.secondaryMinY() && y <= profile.secondaryMaxY();
+        if (!inPrimary && !inSecondary) {
+            return false;
+        }
+
+        double bandWeight = inPrimary ? 0.72 : 0.46;
+        double gate = (richness * 0.58) + (deepBias * 0.27) + (selector * 0.15);
+        return gate > (0.62 - (bandWeight * 0.10));
+    }
+
+    private static boolean isReplaceableHost(Block block) {
+        return block == Blocks.STONE || block == Blocks.DEEPSLATE || block == Blocks.TUFF;
+    }
+
+    private static BlockState profileToState(String id) {
+        if ("metamorphic_copper".equals(id)) {
+            return Blocks.GRANITE.defaultBlockState();
+        }
+        if ("igneous_gold".equals(id)) {
+            return Blocks.ANDESITE.defaultBlockState();
+        }
+        if ("deep_crystal_mix".equals(id)) {
+            return Blocks.TUFF.defaultBlockState();
+        }
+        return Blocks.CALCITE.defaultBlockState();
     }
 
     private static byte pickLayerProfile(float richness, float deepBias, int worldX, int worldZ, long seed, int paletteSize) {

@@ -223,12 +223,17 @@
 - StructureModuleTest.java + RuinsModuleTest.java ✓ - cobertura de gates de placement/degradacion
 - Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest --tests com.piasop.worldgen2.core.WG2ModDispatchTest` exitoso
 - Verificacion tecnica ✓ - `./gradlew build` exitoso
+- MineralModule.java ✓ - primer transform runtime NOISE (estratos ligeros calcite/granite/andesite/tuff)
+- NoiseBasedChunkGeneratorMixin.java ✓ - aplicacion de MineralModule en doFill RETURN antes de carve de cuevas/rio
+- MineralModuleTest.java ✓ - cobertura de gate de estratigrafia por banda y señales
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.MineralModuleTest --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso
 
 ### Pendiente:
-- Continuar Fase 3 con primer efecto NOISE concreto para minerales
+- Continuar Fase 3 con ajuste fino de balance/performance
 
 ### Bugs conocidos:
 - Sin bloqueantes funcionales; performance sigue siendo el principal foco de mejora
 
 ### Proximo objetivo:
-- Integrar primer transform de MineralModule sobre distribucion de bloques
+- Ajustar balance de frecuencia de placement/degradacion/estratos y validar con runClient

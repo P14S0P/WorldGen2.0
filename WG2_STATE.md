@@ -23,9 +23,10 @@ Ultima actualizacion: 2026-06-30
 - [x] MineralModule baseline (Fase 3: estratigrafia inicial + riqueza mineral determinista)
 - [x] Integracion runtime Fase 3 baseline (dispatch NOISE + FEATURES por chunk)
 - [x] Primer efecto FEATURES en runtime (anclas estructurales + degradacion de ruinas)
+- [x] Primer efecto NOISE en runtime para minerales (estratos ligeros deterministas)
 
 ## Modulo actual en desarrollo
-- Integracion de efectos concretos NOISE para minerales — fase: pendiente
+- Ajuste de balance/performance de efectos Fase 3 — fase: pendiente
 
 ## Archivos existentes
 - WG2_SESSION_LOG.md
@@ -50,8 +51,8 @@ Ultima actualizacion: 2026-06-30
 - Sin bugs criticos bloqueantes reportados en Fase 2 tras hardening final
 
 ## Proxima sesion: hacer
-1. Definir primer transform concreto de MineralModule en NOISE
-2. Ajustar balance de frecuencia de anclas/degradacion por bioma
+1. Ajustar balance de frecuencia de anclas/degradacion por bioma
+2. Ajustar densidad/frecuencia de estratos minerales por perfil
 3. Ejecutar validacion integrada de avance Fase 3 (tests + runClient)
 
 ## Notas tecnicas importantes
