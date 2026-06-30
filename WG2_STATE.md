@@ -21,9 +21,10 @@ Ultima actualizacion: 2026-06-30
 - [x] StructureModule baseline (Fase 3: mapa de oportunidad determinista + prototipos base)
 - [x] RuinsModule baseline (Fase 3: oportunidad de ruinas + degradacion determinista)
 - [x] MineralModule baseline (Fase 3: estratigrafia inicial + riqueza mineral determinista)
+- [x] Integracion runtime Fase 3 baseline (dispatch NOISE + FEATURES por chunk)
 
 ## Modulo actual en desarrollo
-- Integracion FEATURES/NOISE fase 3 en runtime — fase: pendiente
+- Integracion de efectos concretos FEATURES en mundo (placement/transform) — fase: pendiente
 
 ## Archivos existentes
 - WG2_SESSION_LOG.md
@@ -48,8 +49,8 @@ Ultima actualizacion: 2026-06-30
 - Sin bugs criticos bloqueantes reportados en Fase 2 tras hardening final
 
 ## Proxima sesion: hacer
-1. Reforzar integracion de Structure/Ruins con hooks de FEATURES
-2. Definir primer hook runtime para MineralModule (NOISE)
+1. Definir primer placement concreto para StructureModule en FEATURES
+2. Definir primer transform de degradacion para RuinsModule en FEATURES
 3. Ejecutar validacion integrada de avance Fase 3 (tests + runClient)
 
 ## Notas tecnicas importantes

@@ -213,12 +213,16 @@
 - MineralModule.java + MineralModuleTest.java + WG2Mod.java ✓ - baseline Fase 3 integrado (NOISE) con estratigrafia/richness determinista
 - Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.MineralModuleTest --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest --tests com.piasop.worldgen2.modules.phase3.TreeModuleTest` exitoso
 - Verificacion tecnica ✓ - `./gradlew build` exitoso
+- NoiseBasedChunkGeneratorMixin.java ✓ - dispatch runtime ampliado a `GenerationPhase.FEATURES` ademas de `GenerationPhase.NOISE`
+- WG2ModDispatchTest.java ✓ - cobertura de dispatch por fase y respeto de gates (`enabled`/`vanillaCompat`)
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.core.WG2ModDispatchTest --tests com.piasop.worldgen2.modules.phase3.MineralModuleTest --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso
 
 ### Pendiente:
-- Continuar Fase 3 con integracion runtime FEATURES/NOISE
+- Continuar Fase 3 con placement/transform real en FEATURES
 
 ### Bugs conocidos:
 - Sin bloqueantes funcionales; performance sigue siendo el principal foco de mejora
 
 ### Proximo objetivo:
-- Integrar Structure/Ruins/Mineral al runtime de generacion
+- Integrar primer placement real de StructureModule y degradacion real de RuinsModule

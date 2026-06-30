@@ -93,8 +93,10 @@ public abstract class NoiseBasedChunkGeneratorMixin {
         }
 
         long worldSeed = ((StructureManagerAccessor) structureManager).wg2$getWorldOptions().seed();
-        WG2Mod.dispatchChunkGeneration(GenerationPhase.NOISE,
-                new com.piasop.worldgen2.api.ChunkGenContext(chunk.getPos().x, chunk.getPos().z, worldSeed));
+        com.piasop.worldgen2.api.ChunkGenContext chunkContext =
+            new com.piasop.worldgen2.api.ChunkGenContext(chunk.getPos().x, chunk.getPos().z, worldSeed);
+        WG2Mod.dispatchChunkGeneration(GenerationPhase.NOISE, chunkContext);
+        WG2Mod.dispatchChunkGeneration(GenerationPhase.FEATURES, chunkContext);
     }
 
     @Inject(method = "doCreateBiomes", at = @At("HEAD"), cancellable = true)
