@@ -1,4 +1,6 @@
 # Minecraft World Generation 2.0
+<img width="1254" height="1254" alt="WorldGen2 0" src="https://github.com/user-attachments/assets/ab64f72e-2458-486a-8057-581adfb7a8fb" />
+
 ## Technical & Game Design Document
 ### Versión: 1.0 — Para Forge 1.20.1+
 ---
