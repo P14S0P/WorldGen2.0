@@ -207,12 +207,15 @@
 - StructureModule.java + StructureModuleTest.java + WG2Mod.java ✓ - baseline Fase 3 integrado (FEATURES) con prototipos deterministas
 - Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.TreeModuleTest --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest` exitoso
 - Verificacion tecnica ✓ - `./gradlew build` exitoso
+- RuinsModule.java + RuinsModuleTest.java + WG2Mod.java ✓ - baseline Fase 3 integrado (FEATURES) con degradacion determinista
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest --tests com.piasop.worldgen2.modules.phase3.TreeModuleTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso
 
 ### Pendiente:
-- Continuar Fase 3 con RuinsModule base
+- Continuar Fase 3 con MineralModule base
 
 ### Bugs conocidos:
 - Sin bloqueantes funcionales; performance sigue siendo el principal foco de mejora
 
 ### Proximo objetivo:
-- Implementar RuinsModule base (degradation pipeline minimo)
+- Implementar MineralModule base (estratigrafia inicial)

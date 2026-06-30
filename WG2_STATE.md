@@ -19,9 +19,10 @@ Ultima actualizacion: 2026-06-30
 - [x] VegetationModule base (Fase 3: tabla clima+altitud, densidad/diversidad determinista)
 - [x] TreeModule base (Fase 3: potencial arboreo determinista + paleta parametrica)
 - [x] StructureModule baseline (Fase 3: mapa de oportunidad determinista + prototipos base)
+- [x] RuinsModule baseline (Fase 3: oportunidad de ruinas + degradacion determinista)
 
 ## Modulo actual en desarrollo
-- RuinsModule base (Fase 3) — fase: pendiente
+- MineralModule base (Fase 3) — fase: pendiente
 
 ## Archivos existentes
 - WG2_SESSION_LOG.md
@@ -46,8 +47,8 @@ Ultima actualizacion: 2026-06-30
 - Sin bugs criticos bloqueantes reportados en Fase 2 tras hardening final
 
 ## Proxima sesion: hacer
-1. Preparar RuinsModule baseline (degradation pipeline minimo)
-2. Definir MineralModule base (estratigrafia inicial)
+1. Definir MineralModule base (estratigrafia inicial)
+2. Reforzar integracion de Structure/Ruins con hooks de FEATURES
 3. Ejecutar validacion integrada de avance Fase 3 (tests + runClient)
 
 ## Notas tecnicas importantes
