@@ -30,4 +30,11 @@ class CaveModuleTest {
         double middle = module.sampleCaveCarveLikelihood(42, 32, -19, 11L);
         assertNotEquals(shallow, middle);
     }
+
+    @Test
+    void carveDecisionIsDeterministicForSameVoxel() {
+        boolean a = module.shouldCarveAt(128, 24, -96, 2222L);
+        boolean b = module.shouldCarveAt(128, 24, -96, 2222L);
+        assertEquals(a, b);
+    }
 }

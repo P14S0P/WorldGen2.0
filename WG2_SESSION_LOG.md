@@ -116,3 +116,62 @@
 
 ### Proximo objetivo:
 - Iniciar Fase 2: CaveModule + RiverModule + OceanModule
+
+## Sesion 2026-06-30 (fase 2 river carve real)
+### Completado:
+- RiverModule.java ✓ - excavacion real de cauce en bloques integrada (aire/agua, ancho y profundidad por mascara)
+- NoiseBasedChunkGeneratorMixin.java ✓ - hook post-noise en `doFill` para aplicar carve real por chunk
+- RiverModuleTest.java ✓ - pruebas de perfil de carve (ancho/profundidad escalan con intensidad)
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase2.RiverModuleTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso y `runClient` inicia correctamente
+
+### Pendiente:
+- Integrar carve real de bloques en CaveModule
+- Integrar de forma mas profunda OceanModule en aplicacion final de terreno
+
+### Bugs conocidos:
+- Chunk seam visible en X=0, investigar en proxima sesion
+
+### Proximo objetivo:
+- Continuar Fase 2 con CaveModule carve real
+
+## Sesion 2026-06-30 (fase 2 cave + ocean integracion real)
+### Completado:
+- CaveModule.java ✓ - carve real 3D de cuevas en bloques integrado
+- OceanModule.java ✓ - aplicacion real de piso oceanico y columna de agua por chunk
+- NoiseBasedChunkGeneratorMixin.java ✓ - pipeline `doFill` ordenado como Ocean -> Cave -> River
+- CaveModuleTest.java ✓ - test de determinismo de decision de carve agregado
+- OceanModuleTest.java ✓ - test de estabilidad de umbral oceano/tierra agregado
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase2.CaveModuleTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase2.OceanModuleTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase2.RiverOceanIntegrationTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso y `runClient` inicia correctamente
+
+### Pendiente:
+- Corregir chunk seam visible en X=0
+- Reemplazar seed tecnica constante por seed real del mundo en hooks runtime
+
+### Bugs conocidos:
+- Chunk seam visible en X=0, investigar en proxima sesion
+
+### Proximo objetivo:
+- Hardening final para cierre de Fase 2
+
+## Sesion 2026-06-30 (fase 2 hardening final)
+### Completado:
+- NoiseBasedChunkGeneratorMixin.java ✓ - reemplazo de seed tecnica por seed real del mundo via StructureManager/WorldOptions
+- NoiseChunkMixin.java + StructureManagerAccessor.java ✓ - seed runtime alineada con mundo actual
+- RiverModule.java ✓ - muestreo suavizado intra-chunk (bilinear) para reducir seam visible
+- OceanModule.java ✓ - muestreo suavizado intra-chunk (bilinear) para continuidad costa/oceano
+- worldgen2.mixins.json ✓ - registro de accessor mixin
+- Verificacion tecnica ✓ - tests focalizados Cave/River/Ocean exitosos
+- Verificacion tecnica ✓ - `./gradlew build` exitoso y `runClient` inicia correctamente
+
+### Pendiente:
+- Iniciar Fase 3 (Vegetation + Structures)
+
+### Bugs conocidos:
+- Sin bugs criticos bloqueantes reportados para cierre de Fase 2
+
+### Proximo objetivo:
+- Arrancar Fase 3 con base de VegetationModule

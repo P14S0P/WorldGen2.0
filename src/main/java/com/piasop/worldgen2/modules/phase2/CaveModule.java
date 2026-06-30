@@ -7,11 +7,19 @@ import com.piasop.worldgen2.api.WG2Module;
 import com.piasop.worldgen2.core.WG2Config;
 import com.piasop.worldgen2.core.WG2DataCache;
 import com.piasop.worldgen2.modules.phase1.Phase1Noise;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
 
 /**
  * Phase 2 cave prototype: domain-warped worm field with vertical cave bands.
  */
 public final class CaveModule implements WG2Module {
+    private static final double CARVE_THRESHOLD = 0.74;
+    private static final int MAX_CARVE_Y = 84;
+
     private WG2DataCache cache;
 
     @Override
@@ -56,6 +64,53 @@ public final class CaveModule implements WG2Module {
     @Override
     public void onRegionLoad(RegionGenContext ctx) {
         // Region preprocessing for caves is added in a later iteration.
+    }
+
+    public void carveChunkCaves(ChunkAccess chunk, long seed) {
+        ChunkPos chunkPos = chunk.getPos();
+        int minBuildY = chunk.getMinBuildHeight();
+        int maxBuildY = minBuildY + chunk.getHeight() - 1;
+        int carveMinY = Math.max(minBuildY + 8, -56);
+        int carveMaxY = Math.min(maxBuildY - 6, MAX_CARVE_Y);
+        if (carveMaxY <= carveMinY) {
+            return;
+        }
+
+        int baseX = chunkPos.getMinBlockX();
+        int baseZ = chunkPos.getMinBlockZ();
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        BlockState air = Blocks.AIR.defaultBlockState();
+
+        for (int localZ = 0; localZ < 16; localZ++) {
+            for (int localX = 0; localX < 16; localX++) {
+                int worldX = baseX + localX;
+                int worldZ = baseZ + localZ;
+
+                for (int y = carveMinY; y <= carveMaxY; y++) {
+                    if (!shouldCarveAt(worldX, y, worldZ, seed)) {
+                        continue;
+                    }
+
+                    cursor.set(worldX, y, worldZ);
+                    BlockState current = chunk.getBlockState(cursor);
+                    if (current.isAir() || current.getFluidState().isSource()) {
+                        continue;
+                    }
+                    chunk.setBlockState(cursor, air, false);
+                }
+            }
+        }
+    }
+
+    boolean shouldCarveAt(int worldX, int worldY, int worldZ, long seed) {
+        double likelihood = sampleCaveCarveLikelihood(worldX, worldY, worldZ, seed);
+        if (likelihood < CARVE_THRESHOLD) {
+            return false;
+        }
+
+        double tube = (Phase1Noise.fbm2D(worldX * 0.030, worldZ * 0.030, seed + 1993L, 2, 2.0, 0.5) + 1.0) * 0.5;
+        double verticalNoise = (Phase1Noise.value2D(worldX * 0.021, (worldY * 0.021) + (worldZ * 0.007), seed + 2647L) + 1.0) * 0.5;
+        return (tube * 0.55) + (verticalNoise * 0.45) > 0.48;
     }
 
     public double sampleCaveCarveLikelihood(int worldX, int worldY, int worldZ, long seed) {

@@ -7,6 +7,12 @@ import com.piasop.worldgen2.api.WG2Module;
 import com.piasop.worldgen2.core.WG2Config;
 import com.piasop.worldgen2.core.WG2DataCache;
 import com.piasop.worldgen2.modules.phase1.Phase1Noise;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
@@ -85,15 +91,80 @@ public final class OceanModule implements WG2Module {
     }
 
     public float sampleOceanMask(int worldX, int worldZ, long seed) {
-        OceanRegionData data = regionForWorld(worldX, worldZ, seed);
-        int[] local = localIndex(worldX, worldZ, data.size());
-        return data.oceanMask()[idx(local[0], local[1], data.size())];
+        int chunkX = Math.floorDiv(worldX, 16);
+        int chunkZ = Math.floorDiv(worldZ, 16);
+        double tx = (Math.floorMod(worldX, 16) + 0.5) / 16.0;
+        double tz = (Math.floorMod(worldZ, 16) + 0.5) / 16.0;
+
+        double m00 = sampleOceanMaskAtChunk(chunkX, chunkZ, seed);
+        double m10 = sampleOceanMaskAtChunk(chunkX + 1, chunkZ, seed);
+        double m01 = sampleOceanMaskAtChunk(chunkX, chunkZ + 1, seed);
+        double m11 = sampleOceanMaskAtChunk(chunkX + 1, chunkZ + 1, seed);
+        double mx0 = lerp(m00, m10, tx);
+        double mx1 = lerp(m01, m11, tx);
+        return (float) clamp(lerp(mx0, mx1, tz), 0.0, 1.0);
     }
 
     public float sampleOceanFloorY(int worldX, int worldZ, long seed) {
-        OceanRegionData data = regionForWorld(worldX, worldZ, seed);
-        int[] local = localIndex(worldX, worldZ, data.size());
-        return data.floorY()[idx(local[0], local[1], data.size())];
+        int chunkX = Math.floorDiv(worldX, 16);
+        int chunkZ = Math.floorDiv(worldZ, 16);
+        double tx = (Math.floorMod(worldX, 16) + 0.5) / 16.0;
+        double tz = (Math.floorMod(worldZ, 16) + 0.5) / 16.0;
+
+        double y00 = sampleOceanFloorAtChunk(chunkX, chunkZ, seed);
+        double y10 = sampleOceanFloorAtChunk(chunkX + 1, chunkZ, seed);
+        double y01 = sampleOceanFloorAtChunk(chunkX, chunkZ + 1, seed);
+        double y11 = sampleOceanFloorAtChunk(chunkX + 1, chunkZ + 1, seed);
+        double yx0 = lerp(y00, y10, tx);
+        double yx1 = lerp(y01, y11, tx);
+        return (float) lerp(yx0, yx1, tz);
+    }
+
+    public void applyOceanToChunk(ChunkAccess chunk, long seed) {
+        ChunkPos chunkPos = chunk.getPos();
+        int minBuildY = chunk.getMinBuildHeight();
+        int maxBuildY = minBuildY + chunk.getHeight() - 1;
+        int baseX = chunkPos.getMinBlockX();
+        int baseZ = chunkPos.getMinBlockZ();
+
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        BlockState air = Blocks.AIR.defaultBlockState();
+        BlockState water = Blocks.WATER.defaultBlockState();
+
+        for (int localZ = 0; localZ < 16; localZ++) {
+            for (int localX = 0; localX < 16; localX++) {
+                int worldX = baseX + localX;
+                int worldZ = baseZ + localZ;
+
+                float oceanMask = sampleOceanMask(worldX, worldZ, seed);
+                if (oceanMask < 0.5f) {
+                    continue;
+                }
+
+                int targetFloorY = Math.round(sampleOceanFloorY(worldX, worldZ, seed));
+                targetFloorY = clampInt(targetFloorY, minBuildY + 5, DEFAULT_SEA_LEVEL - 1);
+
+                int currentFloorY = chunk.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, localX, localZ) - 1;
+                currentFloorY = clampInt(currentFloorY, minBuildY, maxBuildY);
+
+                if (currentFloorY > targetFloorY) {
+                    for (int y = currentFloorY; y > targetFloorY; y--) {
+                        cursor.set(worldX, y, worldZ);
+                        if (y <= DEFAULT_SEA_LEVEL) {
+                            chunk.setBlockState(cursor, water, false);
+                        } else {
+                            chunk.setBlockState(cursor, air, false);
+                        }
+                    }
+                }
+
+                int fillFrom = Math.max(targetFloorY + 1, currentFloorY + 1);
+                for (int y = fillFrom; y <= DEFAULT_SEA_LEVEL && y <= maxBuildY; y++) {
+                    cursor.set(worldX, y, worldZ);
+                    chunk.setBlockState(cursor, water, false);
+                }
+            }
+        }
     }
 
     private OceanRegionData regionForWorld(int worldX, int worldZ, long seed) {
@@ -178,6 +249,26 @@ public final class OceanModule implements WG2Module {
         return new int[]{Math.floorMod(chunkX, size), Math.floorMod(chunkZ, size)};
     }
 
+    private float sampleOceanMaskAtChunk(int chunkX, int chunkZ, long seed) {
+        int regionX = Math.floorDiv(chunkX, REGION_SIZE);
+        int regionZ = Math.floorDiv(chunkZ, REGION_SIZE);
+        OceanRegionData data = regions.computeIfAbsent(regionKey(regionX, regionZ),
+                k -> generateRegionOcean(new RegionGenContext(regionX, regionZ, seed)));
+        int localChunkX = Math.floorMod(chunkX, data.size());
+        int localChunkZ = Math.floorMod(chunkZ, data.size());
+        return data.oceanMask()[idx(localChunkX, localChunkZ, data.size())];
+    }
+
+    private float sampleOceanFloorAtChunk(int chunkX, int chunkZ, long seed) {
+        int regionX = Math.floorDiv(chunkX, REGION_SIZE);
+        int regionZ = Math.floorDiv(chunkZ, REGION_SIZE);
+        OceanRegionData data = regions.computeIfAbsent(regionKey(regionX, regionZ),
+                k -> generateRegionOcean(new RegionGenContext(regionX, regionZ, seed)));
+        int localChunkX = Math.floorMod(chunkX, data.size());
+        int localChunkZ = Math.floorMod(chunkZ, data.size());
+        return data.floorY()[idx(localChunkX, localChunkZ, data.size())];
+    }
+
     private static long regionKey(int rx, int rz) {
         return (((long) rx) << 32) ^ (rz & 0xffffffffL);
     }
@@ -191,6 +282,10 @@ public final class OceanModule implements WG2Module {
     }
 
     private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static int clampInt(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 

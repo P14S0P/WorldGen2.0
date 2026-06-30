@@ -3,6 +3,7 @@ package com.piasop.worldgen2.mixin;
 import com.piasop.worldgen2.api.ChunkGenContext;
 import com.piasop.worldgen2.api.GenerationPhase;
 import com.piasop.worldgen2.core.WG2Mod;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.levelgen.Aquifer;
 import net.minecraft.world.level.levelgen.DensityFunctions;
 import net.minecraft.world.level.levelgen.NoiseChunk;
@@ -20,6 +21,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  */
 @Mixin(NoiseChunk.class)
 public abstract class NoiseChunkMixin {
+	private static final ResourceLocation WG2_NOISE_SEED_PROBE = ResourceLocation.fromNamespaceAndPath("worldgen2", "noise_seed_probe");
+
 	@Inject(method = "<init>", at = @At("TAIL"))
 	private void wg2$onNoiseChunkConstructed(
 			int cellCountXZ,
@@ -34,6 +37,7 @@ public abstract class NoiseChunkMixin {
 			CallbackInfo ci) {
 		int chunkX = Math.floorDiv(firstBlockX, 16);
 		int chunkZ = Math.floorDiv(firstBlockZ, 16);
-		WG2Mod.dispatchChunkGeneration(GenerationPhase.NOISE, new ChunkGenContext(chunkX, chunkZ, 0x5747324CL));
+		long worldSeed = randomState.getOrCreateRandomFactory(WG2_NOISE_SEED_PROBE).at(0, 0, 0).nextLong();
+		WG2Mod.dispatchChunkGeneration(GenerationPhase.NOISE, new ChunkGenContext(chunkX, chunkZ, worldSeed));
 	}
 }

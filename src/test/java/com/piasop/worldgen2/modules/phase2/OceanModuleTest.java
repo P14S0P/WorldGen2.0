@@ -39,4 +39,23 @@ class OceanModuleTest {
             assertTrue(floor >= -140.0f);
         }
     }
+
+    @Test
+    void oceanClassificationThresholdIsStable() {
+        long seed = 31337L;
+        int oceanLike = 0;
+        int landLike = 0;
+        for (int i = 0; i < 48; i++) {
+            int x = -2048 + (i * 97);
+            int z = 1024 - (i * 53);
+            float mask = module.sampleOceanMask(x, z, seed);
+            if (mask >= 0.5f) {
+                oceanLike++;
+            } else {
+                landLike++;
+            }
+        }
+        assertTrue(oceanLike > 0);
+        assertTrue(landLike > 0);
+    }
 }
