@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class RuinsModule implements WG2Module {
     private static final int REGION_SIZE = 32;
-    private static final int SAMPLE_STEP = 4;
+    private static final int SAMPLE_STEP = 8;
 
     private final StructureModule structures = new StructureModule();
     private final ConcurrentHashMap<Long, RuinsRegionData> regions = new ConcurrentHashMap<>();
@@ -161,7 +161,7 @@ public final class RuinsModule implements WG2Module {
 
                 BlockState current = chunk.getBlockState(cursor);
                 if (current.is(cobble.getBlock())) {
-                    if (degradationValue > 0.82f) {
+                    if (degradationValue > 0.88f) {
                         chunk.setBlockState(cursor, Blocks.AIR.defaultBlockState(), false);
                     } else {
                         chunk.setBlockState(cursor, mossy, false);
@@ -172,7 +172,7 @@ public final class RuinsModule implements WG2Module {
     }
 
     boolean shouldApplyDegradation(float ruinChance, float degradation) {
-        return ruinChance > 0.72f && degradation > 0.55f;
+        return ruinChance > 0.80f && degradation > 0.62f;
     }
 
     private static byte pickArchetypeIndex(float ruinChance, float degradation, int worldX, int worldZ, long seed, int paletteSize) {

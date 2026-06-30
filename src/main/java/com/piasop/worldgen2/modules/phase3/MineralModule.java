@@ -23,6 +23,8 @@ public final class MineralModule implements WG2Module {
     private static final int REGION_SIZE = 32;
     private static final int STRATA_MIN_Y = -56;
     private static final int STRATA_MAX_Y = 70;
+    private static final int STRATA_Y_STEP = 2;
+    private static final float COLUMN_MIN_SIGNAL = 0.46f;
 
     private final RuinsModule ruins = new RuinsModule();
     private final ConcurrentHashMap<Long, MineralRegionData> regions = new ConcurrentHashMap<>();
@@ -155,10 +157,13 @@ public final class MineralModule implements WG2Module {
                 int worldZ = baseZ + localZ;
                 float richness = sampleRichness(worldX, worldZ, seed);
                 float deepBias = sampleDeepBandBias(worldX, worldZ, seed);
+                if (((richness * 0.65f) + (deepBias * 0.35f)) < COLUMN_MIN_SIGNAL) {
+                    continue;
+                }
                 MineralProfile profile = sampleProfile(worldX, worldZ, seed);
                 BlockState target = profileToState(profile.id());
 
-                for (int y = minY; y <= maxY; y++) {
+                for (int y = minY; y <= maxY; y += STRATA_Y_STEP) {
                     cursor.set(worldX, y, worldZ);
                     BlockState current = chunk.getBlockState(cursor);
                     if (!isReplaceableHost(current.getBlock())) {
@@ -185,7 +190,7 @@ public final class MineralModule implements WG2Module {
 
         double bandWeight = inPrimary ? 0.72 : 0.46;
         double gate = (richness * 0.58) + (deepBias * 0.27) + (selector * 0.15);
-        return gate > (0.62 - (bandWeight * 0.10));
+        return gate > (0.66 - (bandWeight * 0.08));
     }
 
     private static boolean isReplaceableHost(Block block) {

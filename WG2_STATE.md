@@ -24,9 +24,10 @@ Ultima actualizacion: 2026-06-30
 - [x] Integracion runtime Fase 3 baseline (dispatch NOISE + FEATURES por chunk)
 - [x] Primer efecto FEATURES en runtime (anclas estructurales + degradacion de ruinas)
 - [x] Primer efecto NOISE en runtime para minerales (estratos ligeros deterministas)
+- [x] Ajuste inicial de balance/performance Fase 3 (menor densidad y menor costo por chunk)
 
 ## Modulo actual en desarrollo
-- Ajuste de balance/performance de efectos Fase 3 — fase: pendiente
+- Ajuste fino por bioma y perfil geologico — fase: pendiente
 
 ## Archivos existentes
 - WG2_SESSION_LOG.md
@@ -51,8 +52,8 @@ Ultima actualizacion: 2026-06-30
 - Sin bugs criticos bloqueantes reportados en Fase 2 tras hardening final
 
 ## Proxima sesion: hacer
-1. Ajustar balance de frecuencia de anclas/degradacion por bioma
-2. Ajustar densidad/frecuencia de estratos minerales por perfil
+1. Diferenciar thresholds de Structure/Ruins por macro-bioma
+2. Ajustar perfiles minerales por rango Y y tipo de relieve
 3. Ejecutar validacion integrada de avance Fase 3 (tests + runClient)
 
 ## Notas tecnicas importantes

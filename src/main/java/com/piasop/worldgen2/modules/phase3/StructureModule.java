@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class StructureModule implements WG2Module {
     private static final int REGION_SIZE = 32;
-    private static final int SAMPLE_STEP = 4;
+    private static final int SAMPLE_STEP = 8;
 
     private final TreeModule trees = new TreeModule();
     private final ConcurrentHashMap<Long, StructureRegionData> regions = new ConcurrentHashMap<>();
@@ -148,7 +148,7 @@ public final class StructureModule implements WG2Module {
                 }
                 chunk.setBlockState(cursor, anchor, false);
 
-                if (chance > 0.92f) {
+                if (chance > 0.96f) {
                     cursor.set(worldX, placeY + 1, worldZ);
                     if (chunk.getBlockState(cursor).isAir()) {
                         chunk.setBlockState(cursor, anchor, false);
@@ -159,7 +159,7 @@ public final class StructureModule implements WG2Module {
     }
 
     boolean shouldPlaceAnchor(float chance, double jitter) {
-        return ((chance * 0.82) + (jitter * 0.18)) > 0.86;
+        return ((chance * 0.82) + (jitter * 0.18)) > 0.90;
     }
 
     private static byte pickPrototypeIndex(float chance, int worldX, int worldZ, long seed, int paletteSize) {

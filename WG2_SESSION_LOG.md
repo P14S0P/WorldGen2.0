@@ -228,12 +228,18 @@
 - MineralModuleTest.java ✓ - cobertura de gate de estratigrafia por banda y señales
 - Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.MineralModuleTest --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest` exitoso
 - Verificacion tecnica ✓ - `./gradlew build` exitoso
+- StructureModule.java ✓ - tuning de densidad (sample step mas amplio + threshold mas estricto)
+- RuinsModule.java ✓ - tuning de degradacion (sample step/thresholds mas estrictos)
+- MineralModule.java ✓ - tuning de costo (stride vertical + gate por columna)
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest --tests com.piasop.worldgen2.modules.phase3.MineralModuleTest --tests com.piasop.worldgen2.core.WG2ModDispatchTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso
+- Verificacion tecnica ✓ - `./gradlew runClient` exitoso (mundo carga, handshake OK, guardado/cierre limpio)
 
 ### Pendiente:
-- Continuar Fase 3 con ajuste fino de balance/performance
+- Continuar Fase 3 con ajuste fino por bioma/perfil geologico
 
 ### Bugs conocidos:
 - Sin bloqueantes funcionales; performance sigue siendo el principal foco de mejora
 
 ### Proximo objetivo:
-- Ajustar balance de frecuencia de placement/degradacion/estratos y validar con runClient
+- Introducir tuning contextual por bioma/relieve y revalidar runtime

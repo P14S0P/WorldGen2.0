@@ -39,7 +39,7 @@ class StructureModuleTest {
     @Test
     void anchorPlacementDecisionUsesChanceAndJitter() {
         assertTrue(module.shouldPlaceAnchor(0.95f, 0.8));
-        assertTrue(module.shouldPlaceAnchor(0.88f, 0.95));
+        assertTrue(module.shouldPlaceAnchor(0.93f, 0.95));
         assertTrue(!module.shouldPlaceAnchor(0.60f, 0.2));
     }
 }
