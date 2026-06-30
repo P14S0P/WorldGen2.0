@@ -1,11 +1,14 @@
 package com.piasop.worldgen2.modules.phase1;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Lightweight deterministic noise helpers used by early WG2 modules.
  */
 public final class Phase1Noise {
     private static final long PRIME_X = 0x9E3779B185EBCA87L;
     private static final long PRIME_Z = 0xC2B2AE3D27D4EB4FL;
+    private static final ConcurrentHashMap<Long, OpenSimplex2S> SIMPLEX_CACHE = new ConcurrentHashMap<>();
 
     private Phase1Noise() {
     }
@@ -55,6 +58,44 @@ public final class Phase1Noise {
 
         for (int i = 0; i < octaves; i++) {
             double signal = 1.0 - Math.abs(value2D(x * frequency, z * frequency, seed + (i * 4099L)));
+            signal = signal * signal;
+            sum += signal * amplitude;
+            norm += amplitude;
+            amplitude *= gain;
+            frequency *= lacunarity;
+        }
+
+        return norm == 0.0 ? 0.0 : (sum / norm);
+    }
+
+    public static double openSimplex2S2D(double x, double z, long seed) {
+        return SIMPLEX_CACHE.computeIfAbsent(seed, OpenSimplex2S::new).eval(x, z);
+    }
+
+    public static double fbmOpenSimplex2S2D(double x, double z, long seed, int octaves, double lacunarity, double gain) {
+        double amplitude = 1.0;
+        double frequency = 1.0;
+        double sum = 0.0;
+        double norm = 0.0;
+
+        for (int i = 0; i < octaves; i++) {
+            sum += openSimplex2S2D(x * frequency, z * frequency, seed + (i * 1327L)) * amplitude;
+            norm += amplitude;
+            amplitude *= gain;
+            frequency *= lacunarity;
+        }
+
+        return norm == 0.0 ? 0.0 : (sum / norm);
+    }
+
+    public static double ridgedFbmOpenSimplex2S2D(double x, double z, long seed, int octaves, double lacunarity, double gain) {
+        double amplitude = 1.0;
+        double frequency = 1.0;
+        double sum = 0.0;
+        double norm = 0.0;
+
+        for (int i = 0; i < octaves; i++) {
+            double signal = 1.0 - Math.abs(openSimplex2S2D(x * frequency, z * frequency, seed + (i * 4099L)));
             signal = signal * signal;
             sum += signal * amplitude;
             norm += amplitude;

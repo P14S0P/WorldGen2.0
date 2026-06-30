@@ -66,14 +66,14 @@ public final class TerrainModule implements WG2Module {
         double warpStrength = config.getFloat("terrain.warp_strength", 42.0F);
         double verticalScale = config.getFloat("terrain.vertical_scale", 78.0F);
 
-        double qx = Phase1Noise.fbm2D(worldX * warpScale, worldZ * warpScale, worldSeed + 17L, 3, 2.0, 0.5);
-        double qz = Phase1Noise.fbm2D(worldX * warpScale, worldZ * warpScale, worldSeed + 29L, 3, 2.0, 0.5);
+        double qx = Phase1Noise.fbmOpenSimplex2S2D(worldX * warpScale, worldZ * warpScale, worldSeed + 17L, 3, 2.0, 0.5);
+        double qz = Phase1Noise.fbmOpenSimplex2S2D(worldX * warpScale, worldZ * warpScale, worldSeed + 29L, 3, 2.0, 0.5);
 
         double warpedX = worldX + (qx * warpStrength);
         double warpedZ = worldZ + (qz * warpStrength);
 
-        double macro = Phase1Noise.fbm2D(worldX * scale * 0.6, worldZ * scale * 0.6, worldSeed + 101L, 4, 2.0, 0.5);
-        double ridged = Phase1Noise.ridgedFbm2D(warpedX * scale, warpedZ * scale, worldSeed + 31337L, 4, 2.1, 0.45);
+        double macro = Phase1Noise.fbmOpenSimplex2S2D(worldX * scale * 0.6, worldZ * scale * 0.6, worldSeed + 101L, 4, 2.0, 0.5);
+        double ridged = Phase1Noise.ridgedFbmOpenSimplex2S2D(warpedX * scale, warpedZ * scale, worldSeed + 31337L, 4, 2.1, 0.45);
 
         double base = 72.0 + (macro * 24.0);
         double detail = (ridged - 0.5) * verticalScale;

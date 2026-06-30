@@ -1532,26 +1532,26 @@ LAYER STACK (de bajo a alto nivel):
 ## 9. Roadmap de implementación
 
 ### Fase 0 — Core infrastructure (4–6 semanas)
-- [ ] WG2Module interface + WG2Registry
-- [ ] WG2ThreadPool + WG2DataCache
-- [ ] WG2EventBus
-- [ ] WG2Config (TOML)
-- [ ] Tests unitarios de infraestructura
+- [x] WG2Module interface + WG2Registry
+- [x] WG2ThreadPool + WG2DataCache
+- [x] WG2EventBus
+- [x] WG2Config (TOML)
+- [x] Tests unitarios de infraestructura
 
 ### Fase 1 — Terrain + Climate (6–8 semanas)
-- [ ] TerrainModule: Domain Warp + OpenSimplex2S + RidgedFBM
-- [ ] ClimateModule: temperatura + precipitación + Köppen
-- [ ] BiomeModule: tabla 2D clima→bioma + blending
-- [ ] Benchmark comparativo vs vanilla
+- [x] TerrainModule: Domain Warp + OpenSimplex2S + RidgedFBM
+- [x] ClimateModule: temperatura + precipitación + Köppen
+- [x] BiomeModule: tabla 2D clima→bioma + blending
+- [x] Benchmark comparativo vs vanilla
 
 ### Fase 2 — Caves + Rivers (6–8 semanas)
-- [ ] CaveModule: CA 3D + Worm Domain-Warped + Abisal
-- [ ] RiverModule: D8 Flow + meandering + excavación
-- [ ] OceanModule: plataforma continental + fisiografía submarina
-- [ ] Integration tests: ríos → océano funcional
+- [x] CaveModule: CA 3D + Worm Domain-Warped + Abisal
+- [x] RiverModule: D8 Flow + meandering + excavación
+- [x] OceanModule: plataforma continental + fisiografía submarina
+- [x] Integration tests: ríos → océano funcional
 
 ### Fase 3 — Vegetation + Structures (8–10 semanas)
-- [ ] VegetationModule: tabla clima+altitud
+- [x] VegetationModule: tabla clima+altitud
 - [ ] TreeModule: L-Systems paramétricos + paleta pre-generada
 - [ ] StructureModule: WFC + grammar-based placement
 - [ ] RuinsModule: degradation pipeline

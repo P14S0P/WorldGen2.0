@@ -37,4 +37,13 @@ class CaveModuleTest {
         boolean b = module.shouldCarveAt(128, 24, -96, 2222L);
         assertEquals(a, b);
     }
+
+    @Test
+    void abyssalBandIncreasesDeepLikelihood() {
+        double deep = module.sampleAbyssalContribution(-56);
+        double mid = module.sampleAbyssalContribution(-24);
+        double shallow = module.sampleAbyssalContribution(16);
+        assertTrue(deep > mid);
+        assertTrue(mid > shallow);
+    }
 }

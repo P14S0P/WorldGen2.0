@@ -79,6 +79,24 @@ public abstract class NoiseBasedChunkGeneratorMixin {
         riverModule.ifPresent(module -> module.carveChunkRivers(outChunk, worldSeed));
     }
 
+    @Inject(method = "doFill", at = @At("HEAD"))
+    private void wg2$dispatchNoisePhase(
+            Blender blender,
+            StructureManager structureManager,
+            RandomState randomState,
+            ChunkAccess chunk,
+            int minCellY,
+            int cellHeight,
+            CallbackInfoReturnable<ChunkAccess> cir) {
+        if (!WG2Config.enabled || WG2Config.vanillaCompat) {
+            return;
+        }
+
+        long worldSeed = ((StructureManagerAccessor) structureManager).wg2$getWorldOptions().seed();
+        WG2Mod.dispatchChunkGeneration(GenerationPhase.NOISE,
+                new com.piasop.worldgen2.api.ChunkGenContext(chunk.getPos().x, chunk.getPos().z, worldSeed));
+    }
+
     @Inject(method = "doCreateBiomes", at = @At("HEAD"), cancellable = true)
     private void wg2$injectBiomeSelection(
             Blender blender,

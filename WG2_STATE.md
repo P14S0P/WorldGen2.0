@@ -4,10 +4,11 @@ Ultima actualizacion: 2026-06-30
 ## Modulos completados ✓
 - [x] Core infrastructure (WG2Module, WG2Registry, WG2ThreadPool, WG2DataCache, WG2EventBus, WG2Config)
 - [x] TerrainModule (Fase 1 base funcional)
+- [x] TerrainModule (Fase 1: Domain Warp + OpenSimplex2S + RidgedFBM)
 - [x] ClimateModule (temperatura, precipitacion, Koppen, efecto orografico)
 - [x] BiomeModule (tabla clima->bioma + blending)
 - [x] Benchmark Fase 1 vs vanilla-like
-- [x] Integracion runtime de mixins (NoiseChunk + NoiseBasedChunkGenerator)
+- [x] Integracion runtime de mixins activos (NoiseBasedChunkGenerator + StructureManagerAccessor)
 - [x] CaveModule prototipo (Fase 2)
 - [x] RiverModule prototipo (Fase 2)
 - [x] OceanModule prototipo (Fase 2)
@@ -25,6 +26,8 @@ Ultima actualizacion: 2026-06-30
 - src/main/java/com/piasop/worldgen2/core/WG2Mod.java
 - src/main/java/com/piasop/worldgen2/mixin/NoiseChunkMixin.java
 - src/main/java/com/piasop/worldgen2/mixin/NoiseBasedChunkGeneratorMixin.java
+- src/main/java/com/piasop/worldgen2/mixin/StructureManagerAccessor.java
+- src/main/java/com/piasop/worldgen2/modules/phase1/OpenSimplex2S.java
 - src/main/java/com/piasop/worldgen2/modules/phase1/TerrainModule.java
 - src/main/java/com/piasop/worldgen2/modules/phase1/ClimateModule.java
 - src/main/java/com/piasop/worldgen2/modules/phase1/BiomeModule.java
@@ -48,8 +51,9 @@ Ultima actualizacion: 2026-06-30
 ## Notas tecnicas importantes
 - Trabajar un modulo por sesion.
 - No avanzar al siguiente modulo hasta validar runClient.
-- Seed global real del mundo conectada en hooks runtime principales.
+- Seed global real del mundo conectada en hooks runtime activos (`NoiseBasedChunkGeneratorMixin` + `StructureManagerAccessor`).
 - River/Cave/Ocean aplican cambios reales en bloques dentro de doFill.
 - Muestreo river/ocean suavizado (bilinear por posicion intra-chunk) para reducir costuras visibles en ejes/chunk borders.
-- Resultado de la ultima validacion runtime: performance increible y mundo iniciando sin lag.
+- TerrainModule usa OpenSimplex2S en dominio y macro para cumplir especificacion de Fase 1.
+- Estado de performance actual: funcional pero con degradacion notable; requiere optimizacion en Fase 5.
 - Integration tests rio->oceano ya estan en verde y forman parte de la base de regresion de Fase 2.

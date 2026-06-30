@@ -193,3 +193,20 @@
 
 ### Proximo objetivo:
 - Continuar Fase 3 con TreeModule base
+
+## Sesion 2026-06-30 (alineacion fases previas)
+### Completado:
+- OpenSimplex2S.java + Phase1Noise.java + TerrainModule.java ✓ - Terrain actualizado a Domain Warp + OpenSimplex2S + RidgedFBM
+- WG2_STATE.md + README.md ✓ - documentacion alineada con progreso real de fases
+- WG2_STATE.md + WG2_SESSION_LOG.md ✓ - corregida narrativa de performance (funcional con degradacion notable)
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase1.Phase1BenchmarkTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso
+
+### Pendiente:
+- Continuar Fase 3 con TreeModule base
+
+### Bugs conocidos:
+- Sin bloqueantes funcionales; performance sigue siendo el principal foco de mejora
+
+### Proximo objetivo:
+- Implementar TreeModule base (L-Systems parametrico minimo)

@@ -19,6 +19,8 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 public final class CaveModule implements WG2Module {
     private static final double CARVE_THRESHOLD = 0.74;
     private static final int MAX_CARVE_Y = 84;
+    private static final int Y_STEP = 2;
+    private static final double COLUMN_GATE_THRESHOLD = 0.43;
 
     private WG2DataCache cache;
 
@@ -76,6 +78,10 @@ public final class CaveModule implements WG2Module {
             return;
         }
 
+        int yCount = ((carveMaxY - carveMinY) / Y_STEP) + 1;
+        boolean[] initial = new boolean[16 * 16 * yCount];
+        boolean[] smooth = new boolean[initial.length];
+
         int baseX = chunkPos.getMinBlockX();
         int baseZ = chunkPos.getMinBlockZ();
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
@@ -86,17 +92,45 @@ public final class CaveModule implements WG2Module {
                 int worldX = baseX + localX;
                 int worldZ = baseZ + localZ;
 
-                for (int y = carveMinY; y <= carveMaxY; y++) {
-                    if (!shouldCarveAt(worldX, y, worldZ, seed)) {
+                if (sampleColumnPotential(worldX, worldZ, seed) < COLUMN_GATE_THRESHOLD) {
+                    continue;
+                }
+
+                for (int yi = 0; yi < yCount; yi++) {
+                    int y = carveMinY + (yi * Y_STEP);
+                    if (shouldCarveAt(worldX, y, worldZ, seed)) {
+                        initial[voxelIndex(localX, localZ, yi, yCount)] = true;
+                    }
+                }
+            }
+        }
+
+        for (int localZ = 0; localZ < 16; localZ++) {
+            for (int localX = 0; localX < 16; localX++) {
+                for (int yi = 0; yi < yCount; yi++) {
+                    int idx = voxelIndex(localX, localZ, yi, yCount);
+                    int neighbors = openNeighborCount(initial, localX, localZ, yi, yCount);
+                    if (initial[idx]) {
+                        smooth[idx] = neighbors >= 2;
+                    } else {
+                        smooth[idx] = neighbors >= 4;
+                    }
+                }
+            }
+        }
+
+        for (int localZ = 0; localZ < 16; localZ++) {
+            for (int localX = 0; localX < 16; localX++) {
+                int worldX = baseX + localX;
+                int worldZ = baseZ + localZ;
+                for (int yi = 0; yi < yCount; yi++) {
+                    if (!smooth[voxelIndex(localX, localZ, yi, yCount)]) {
                         continue;
                     }
 
-                    cursor.set(worldX, y, worldZ);
-                    BlockState current = chunk.getBlockState(cursor);
-                    if (current.isAir() || current.getFluidState().isSource()) {
-                        continue;
-                    }
-                    chunk.setBlockState(cursor, air, false);
+                    int y = carveMinY + (yi * Y_STEP);
+                    carveVoxel(chunk, cursor, air, worldX, y, worldZ);
+                    carveVoxel(chunk, cursor, air, worldX, y + 1, worldZ);
                 }
             }
         }
@@ -125,7 +159,66 @@ public final class CaveModule implements WG2Module {
 
         double detail = (Phase1Noise.fbm2D(wx * 0.012, wz * 0.012, seed + 1237L, 4, 2.1, 0.48) + 1.0) * 0.5;
         double vertical = verticalBand(worldY);
-        return clamp((shape * 0.55) + (detail * 0.30) + (vertical * 0.15), 0.0, 1.0);
+        double abyssal = abyssalBand(worldY);
+        return clamp((shape * 0.45) + (detail * 0.28) + (vertical * 0.17) + (abyssal * 0.10), 0.0, 1.0);
+    }
+
+    private static double abyssalBand(int y) {
+        if (y > -20) {
+            return 0.0;
+        }
+        double t = clamp(((-20.0 - y) / 44.0), 0.0, 1.0);
+        return t * t;
+    }
+
+    double sampleAbyssalContribution(int worldY) {
+        return abyssalBand(worldY);
+    }
+
+    private static double sampleColumnPotential(int worldX, int worldZ, long seed) {
+        return (Phase1Noise.fbm2D(worldX * 0.018, worldZ * 0.018, seed + 3121L, 2, 2.0, 0.5) + 1.0) * 0.5;
+    }
+
+    private static int voxelIndex(int x, int z, int yIndex, int yCount) {
+        return (((z * 16) + x) * yCount) + yIndex;
+    }
+
+    private static int openNeighborCount(boolean[] grid, int x, int z, int yi, int yCount) {
+        int count = 0;
+        if (x > 0 && grid[voxelIndex(x - 1, z, yi, yCount)]) {
+            count++;
+        }
+        if (x < 15 && grid[voxelIndex(x + 1, z, yi, yCount)]) {
+            count++;
+        }
+        if (z > 0 && grid[voxelIndex(x, z - 1, yi, yCount)]) {
+            count++;
+        }
+        if (z < 15 && grid[voxelIndex(x, z + 1, yi, yCount)]) {
+            count++;
+        }
+        if (yi > 0 && grid[voxelIndex(x, z, yi - 1, yCount)]) {
+            count++;
+        }
+        if (yi + 1 < yCount && grid[voxelIndex(x, z, yi + 1, yCount)]) {
+            count++;
+        }
+        return count;
+    }
+
+    private static void carveVoxel(
+            ChunkAccess chunk,
+            BlockPos.MutableBlockPos cursor,
+            BlockState air,
+            int worldX,
+            int y,
+            int worldZ) {
+        cursor.set(worldX, y, worldZ);
+        BlockState current = chunk.getBlockState(cursor);
+        if (current.isAir() || current.getFluidState().isSource()) {
+            return;
+        }
+        chunk.setBlockState(cursor, air, false);
     }
 
     private static double verticalBand(int y) {
