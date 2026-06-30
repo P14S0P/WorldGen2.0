@@ -12,6 +12,7 @@ import com.piasop.worldgen2.modules.phase1.TerrainModule;
 import com.piasop.worldgen2.modules.phase2.CaveModule;
 import com.piasop.worldgen2.modules.phase2.OceanModule;
 import com.piasop.worldgen2.modules.phase2.RiverModule;
+import com.piasop.worldgen2.modules.phase3.MineralModule;
 import com.piasop.worldgen2.modules.phase3.RuinsModule;
 import com.piasop.worldgen2.modules.phase3.StructureModule;
 import com.piasop.worldgen2.modules.phase3.TreeModule;
@@ -69,6 +70,7 @@ public class WG2Mod {
         WG2Registry.register(new TreeModule());
         WG2Registry.register(new StructureModule());
         WG2Registry.register(new RuinsModule());
+        WG2Registry.register(new MineralModule());
     }
 
     @SubscribeEvent

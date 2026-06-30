@@ -210,12 +210,15 @@
 - RuinsModule.java + RuinsModuleTest.java + WG2Mod.java ✓ - baseline Fase 3 integrado (FEATURES) con degradacion determinista
 - Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest --tests com.piasop.worldgen2.modules.phase3.TreeModuleTest` exitoso
 - Verificacion tecnica ✓ - `./gradlew build` exitoso
+- MineralModule.java + MineralModuleTest.java + WG2Mod.java ✓ - baseline Fase 3 integrado (NOISE) con estratigrafia/richness determinista
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.MineralModuleTest --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest --tests com.piasop.worldgen2.modules.phase3.TreeModuleTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso
 
 ### Pendiente:
-- Continuar Fase 3 con MineralModule base
+- Continuar Fase 3 con integracion runtime FEATURES/NOISE
 
 ### Bugs conocidos:
 - Sin bloqueantes funcionales; performance sigue siendo el principal foco de mejora
 
 ### Proximo objetivo:
-- Implementar MineralModule base (estratigrafia inicial)
+- Integrar Structure/Ruins/Mineral al runtime de generacion

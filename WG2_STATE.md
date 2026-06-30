@@ -20,9 +20,10 @@ Ultima actualizacion: 2026-06-30
 - [x] TreeModule base (Fase 3: potencial arboreo determinista + paleta parametrica)
 - [x] StructureModule baseline (Fase 3: mapa de oportunidad determinista + prototipos base)
 - [x] RuinsModule baseline (Fase 3: oportunidad de ruinas + degradacion determinista)
+- [x] MineralModule baseline (Fase 3: estratigrafia inicial + riqueza mineral determinista)
 
 ## Modulo actual en desarrollo
-- MineralModule base (Fase 3) — fase: pendiente
+- Integracion FEATURES/NOISE fase 3 en runtime — fase: pendiente
 
 ## Archivos existentes
 - WG2_SESSION_LOG.md
@@ -47,8 +48,8 @@ Ultima actualizacion: 2026-06-30
 - Sin bugs criticos bloqueantes reportados en Fase 2 tras hardening final
 
 ## Proxima sesion: hacer
-1. Definir MineralModule base (estratigrafia inicial)
-2. Reforzar integracion de Structure/Ruins con hooks de FEATURES
+1. Reforzar integracion de Structure/Ruins con hooks de FEATURES
+2. Definir primer hook runtime para MineralModule (NOISE)
 3. Ejecutar validacion integrada de avance Fase 3 (tests + runClient)
 
 ## Notas tecnicas importantes
