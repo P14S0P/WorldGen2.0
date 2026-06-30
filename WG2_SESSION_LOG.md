@@ -201,12 +201,15 @@
 - WG2_STATE.md + WG2_SESSION_LOG.md ✓ - corregida narrativa de performance (funcional con degradacion notable)
 - Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase1.Phase1BenchmarkTest` exitoso
 - Verificacion tecnica ✓ - `./gradlew build` exitoso
+- TreeModule.java + TreeModuleTest.java + WG2Mod.java ✓ - base Fase 3 integrada (FEATURES) con validacion unitaria
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.VegetationModuleTest --tests com.piasop.worldgen2.modules.phase3.TreeModuleTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso
 
 ### Pendiente:
-- Continuar Fase 3 con TreeModule base
+- Continuar Fase 3 con StructureModule base
 
 ### Bugs conocidos:
 - Sin bloqueantes funcionales; performance sigue siendo el principal foco de mejora
 
 ### Proximo objetivo:
-- Implementar TreeModule base (L-Systems parametrico minimo)
+- Implementar StructureModule base (spawn determinista controlado)

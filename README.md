@@ -1552,7 +1552,7 @@ LAYER STACK (de bajo a alto nivel):
 
 ### Fase 3 — Vegetation + Structures (8–10 semanas)
 - [x] VegetationModule: tabla clima+altitud
-- [ ] TreeModule: L-Systems paramétricos + paleta pre-generada
+- [x] TreeModule: L-Systems paramétricos + paleta pre-generada
 - [ ] StructureModule: WFC + grammar-based placement
 - [ ] RuinsModule: degradation pipeline
 - [ ] MineralModule: estratigrafía geológica

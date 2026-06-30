@@ -17,9 +17,10 @@ Ultima actualizacion: 2026-06-30
 - [x] CaveModule carve real 3D en bloques (hook runtime en doFill)
 - [x] OceanModule integrado al chunk final (piso oceanico + columna de agua en doFill)
 - [x] VegetationModule base (Fase 3: tabla clima+altitud, densidad/diversidad determinista)
+- [x] TreeModule base (Fase 3: potencial arboreo determinista + paleta parametrica)
 
 ## Modulo actual en desarrollo
-- TreeModule base (Fase 3) — fase: pendiente
+- StructureModule base (Fase 3) — fase: pendiente
 
 ## Archivos existentes
 - WG2_SESSION_LOG.md
@@ -44,8 +45,8 @@ Ultima actualizacion: 2026-06-30
 - Sin bugs criticos bloqueantes reportados en Fase 2 tras hardening final
 
 ## Proxima sesion: hacer
-1. Iniciar TreeModule base (L-Systems parametrico minimo)
-2. Definir base de StructuresModule (spawn determinista controlado)
+1. Definir base de StructureModule (spawn determinista controlado)
+2. Preparar RuinsModule baseline (degradation pipeline minimo)
 3. Ejecutar validacion integrada de avance Fase 3 (tests + runClient)
 
 ## Notas tecnicas importantes
