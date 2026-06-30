@@ -10,6 +10,8 @@ import com.piasop.worldgen2.modules.phase1.ClimateModule;
 import com.piasop.worldgen2.modules.phase2.CaveModule;
 import com.piasop.worldgen2.modules.phase2.OceanModule;
 import com.piasop.worldgen2.modules.phase2.RiverModule;
+import com.piasop.worldgen2.modules.phase3.RuinsModule;
+import com.piasop.worldgen2.modules.phase3.StructureModule;
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
 import net.minecraft.resources.ResourceLocation;
@@ -74,9 +76,17 @@ public abstract class NoiseBasedChunkGeneratorMixin {
         Optional<RiverModule> riverModule = WG2Registry.get("wg2:rivers")
                 .filter(RiverModule.class::isInstance)
                 .map(RiverModule.class::cast);
+        Optional<StructureModule> structureModule = WG2Registry.get("wg2:structures")
+            .filter(StructureModule.class::isInstance)
+            .map(StructureModule.class::cast);
+        Optional<RuinsModule> ruinsModule = WG2Registry.get("wg2:ruins")
+            .filter(RuinsModule.class::isInstance)
+            .map(RuinsModule.class::cast);
         oceanModule.ifPresent(module -> module.applyOceanToChunk(outChunk, worldSeed));
         caveModule.ifPresent(module -> module.carveChunkCaves(outChunk, worldSeed));
         riverModule.ifPresent(module -> module.carveChunkRivers(outChunk, worldSeed));
+        structureModule.ifPresent(module -> module.applyStructureAnchorsToChunk(outChunk, worldSeed));
+        ruinsModule.ifPresent(module -> module.applyRuinDegradationToChunk(outChunk, worldSeed));
     }
 
     @Inject(method = "doFill", at = @At("HEAD"))

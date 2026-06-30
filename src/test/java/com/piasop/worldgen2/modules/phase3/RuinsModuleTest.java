@@ -41,4 +41,11 @@ class RuinsModuleTest {
         assertEquals(first.id(), second.id());
         assertTrue(first.minDegradation() <= first.maxDegradation());
     }
+
+    @Test
+    void degradationGateRequiresBothRuinChanceAndDamage() {
+        assertTrue(module.shouldApplyDegradation(0.83f, 0.71f));
+        assertTrue(!module.shouldApplyDegradation(0.50f, 0.90f));
+        assertTrue(!module.shouldApplyDegradation(0.90f, 0.30f));
+    }
 }

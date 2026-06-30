@@ -7,6 +7,12 @@ import com.piasop.worldgen2.api.WG2Module;
 import com.piasop.worldgen2.core.WG2Config;
 import com.piasop.worldgen2.core.WG2DataCache;
 import com.piasop.worldgen2.modules.phase1.Phase1Noise;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -15,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class StructureModule implements WG2Module {
     private static final int REGION_SIZE = 32;
+    private static final int SAMPLE_STEP = 4;
 
     private final TreeModule trees = new TreeModule();
     private final ConcurrentHashMap<Long, StructureRegionData> regions = new ConcurrentHashMap<>();
@@ -112,6 +119,49 @@ public final class StructureModule implements WG2Module {
         return data.palette()[Math.min(paletteIdx, data.palette().length - 1)];
     }
 
+    public void applyStructureAnchorsToChunk(ChunkAccess chunk, long seed) {
+        ChunkPos chunkPos = chunk.getPos();
+        int minBuildY = chunk.getMinBuildHeight();
+        int maxBuildY = minBuildY + chunk.getHeight() - 1;
+        int baseX = chunkPos.getMinBlockX();
+        int baseZ = chunkPos.getMinBlockZ();
+
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        BlockState anchor = Blocks.COBBLESTONE.defaultBlockState();
+
+        for (int localZ = 0; localZ < 16; localZ += SAMPLE_STEP) {
+            for (int localX = 0; localX < 16; localX += SAMPLE_STEP) {
+                int worldX = baseX + localX;
+                int worldZ = baseZ + localZ;
+                float chance = sampleStructureChance(worldX, worldZ, seed);
+                double jitter = (Phase1Noise.value2D(worldX * 0.021, worldZ * 0.021, seed + 31847L) + 1.0) * 0.5;
+                if (!shouldPlaceAnchor(chance, jitter)) {
+                    continue;
+                }
+
+                int surfaceY = chunk.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, localX, localZ) - 1;
+                int placeY = clampInt(surfaceY + 1, minBuildY + 1, maxBuildY - 2);
+
+                cursor.set(worldX, placeY, worldZ);
+                if (!chunk.getBlockState(cursor).isAir()) {
+                    continue;
+                }
+                chunk.setBlockState(cursor, anchor, false);
+
+                if (chance > 0.92f) {
+                    cursor.set(worldX, placeY + 1, worldZ);
+                    if (chunk.getBlockState(cursor).isAir()) {
+                        chunk.setBlockState(cursor, anchor, false);
+                    }
+                }
+            }
+        }
+    }
+
+    boolean shouldPlaceAnchor(float chance, double jitter) {
+        return ((chance * 0.82) + (jitter * 0.18)) > 0.86;
+    }
+
     private static byte pickPrototypeIndex(float chance, int worldX, int worldZ, long seed, int paletteSize) {
         double jitter = (Phase1Noise.value2D(worldX * 0.013, worldZ * 0.013, seed + 20389L) + 1.0) * 0.5;
         double selector = clamp((chance * 0.82) + (jitter * 0.18), 0.0, 0.999999);
@@ -137,6 +187,10 @@ public final class StructureModule implements WG2Module {
     }
 
     private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static int clampInt(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 

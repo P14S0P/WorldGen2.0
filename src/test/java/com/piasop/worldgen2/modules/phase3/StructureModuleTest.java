@@ -35,4 +35,11 @@ class StructureModuleTest {
         assertEquals(first.id(), second.id());
         assertTrue(first.minDensity() <= first.maxDensity());
     }
+
+    @Test
+    void anchorPlacementDecisionUsesChanceAndJitter() {
+        assertTrue(module.shouldPlaceAnchor(0.95f, 0.8));
+        assertTrue(module.shouldPlaceAnchor(0.88f, 0.95));
+        assertTrue(!module.shouldPlaceAnchor(0.60f, 0.2));
+    }
 }

@@ -217,12 +217,18 @@
 - WG2ModDispatchTest.java ✓ - cobertura de dispatch por fase y respeto de gates (`enabled`/`vanillaCompat`)
 - Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.core.WG2ModDispatchTest --tests com.piasop.worldgen2.modules.phase3.MineralModuleTest --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest` exitoso
 - Verificacion tecnica ✓ - `./gradlew build` exitoso
+- StructureModule.java ✓ - primer placement runtime en FEATURES (anclas de cobblestone ligeras por muestreo)
+- RuinsModule.java ✓ - primer transform runtime en FEATURES (mossify/remove segun degradacion)
+- NoiseBasedChunkGeneratorMixin.java ✓ - aplicacion de Structure/Ruins despues de Ocean/Cave/River
+- StructureModuleTest.java + RuinsModuleTest.java ✓ - cobertura de gates de placement/degradacion
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest --tests com.piasop.worldgen2.core.WG2ModDispatchTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso
 
 ### Pendiente:
-- Continuar Fase 3 con placement/transform real en FEATURES
+- Continuar Fase 3 con primer efecto NOISE concreto para minerales
 
 ### Bugs conocidos:
 - Sin bloqueantes funcionales; performance sigue siendo el principal foco de mejora
 
 ### Proximo objetivo:
-- Integrar primer placement real de StructureModule y degradacion real de RuinsModule
+- Integrar primer transform de MineralModule sobre distribucion de bloques

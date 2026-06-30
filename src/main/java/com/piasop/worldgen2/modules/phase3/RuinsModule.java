@@ -7,6 +7,12 @@ import com.piasop.worldgen2.api.WG2Module;
 import com.piasop.worldgen2.core.WG2Config;
 import com.piasop.worldgen2.core.WG2DataCache;
 import com.piasop.worldgen2.modules.phase1.Phase1Noise;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -15,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class RuinsModule implements WG2Module {
     private static final int REGION_SIZE = 32;
+    private static final int SAMPLE_STEP = 4;
 
     private final StructureModule structures = new StructureModule();
     private final ConcurrentHashMap<Long, RuinsRegionData> regions = new ConcurrentHashMap<>();
@@ -127,6 +134,47 @@ public final class RuinsModule implements WG2Module {
         return data.palette()[Math.min(paletteIdx, data.palette().length - 1)];
     }
 
+    public void applyRuinDegradationToChunk(ChunkAccess chunk, long seed) {
+        ChunkPos chunkPos = chunk.getPos();
+        int minBuildY = chunk.getMinBuildHeight();
+        int maxBuildY = minBuildY + chunk.getHeight() - 1;
+        int baseX = chunkPos.getMinBlockX();
+        int baseZ = chunkPos.getMinBlockZ();
+
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
+        BlockState mossy = Blocks.MOSSY_COBBLESTONE.defaultBlockState();
+
+        for (int localZ = 0; localZ < 16; localZ += SAMPLE_STEP) {
+            for (int localX = 0; localX < 16; localX += SAMPLE_STEP) {
+                int worldX = baseX + localX;
+                int worldZ = baseZ + localZ;
+                float chance = sampleRuinChance(worldX, worldZ, seed);
+                float degradationValue = sampleDegradation(worldX, worldZ, seed);
+                if (!shouldApplyDegradation(chance, degradationValue)) {
+                    continue;
+                }
+
+                int surfaceY = chunk.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, localX, localZ) - 1;
+                int targetY = clampInt(surfaceY + 1, minBuildY + 1, maxBuildY - 1);
+                cursor.set(worldX, targetY, worldZ);
+
+                BlockState current = chunk.getBlockState(cursor);
+                if (current.is(cobble.getBlock())) {
+                    if (degradationValue > 0.82f) {
+                        chunk.setBlockState(cursor, Blocks.AIR.defaultBlockState(), false);
+                    } else {
+                        chunk.setBlockState(cursor, mossy, false);
+                    }
+                }
+            }
+        }
+    }
+
+    boolean shouldApplyDegradation(float ruinChance, float degradation) {
+        return ruinChance > 0.72f && degradation > 0.55f;
+    }
+
     private static byte pickArchetypeIndex(float ruinChance, float degradation, int worldX, int worldZ, long seed, int paletteSize) {
         double jitter = (Phase1Noise.value2D(worldX * 0.014, worldZ * 0.014, seed + 25117L) + 1.0) * 0.5;
         double selector = clamp((ruinChance * 0.60) + (degradation * 0.25) + (jitter * 0.15), 0.0, 0.999999);
@@ -152,6 +200,10 @@ public final class RuinsModule implements WG2Module {
     }
 
     private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static int clampInt(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 

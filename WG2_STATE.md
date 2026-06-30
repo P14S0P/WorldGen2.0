@@ -22,9 +22,10 @@ Ultima actualizacion: 2026-06-30
 - [x] RuinsModule baseline (Fase 3: oportunidad de ruinas + degradacion determinista)
 - [x] MineralModule baseline (Fase 3: estratigrafia inicial + riqueza mineral determinista)
 - [x] Integracion runtime Fase 3 baseline (dispatch NOISE + FEATURES por chunk)
+- [x] Primer efecto FEATURES en runtime (anclas estructurales + degradacion de ruinas)
 
 ## Modulo actual en desarrollo
-- Integracion de efectos concretos FEATURES en mundo (placement/transform) — fase: pendiente
+- Integracion de efectos concretos NOISE para minerales — fase: pendiente
 
 ## Archivos existentes
 - WG2_SESSION_LOG.md
@@ -49,8 +50,8 @@ Ultima actualizacion: 2026-06-30
 - Sin bugs criticos bloqueantes reportados en Fase 2 tras hardening final
 
 ## Proxima sesion: hacer
-1. Definir primer placement concreto para StructureModule en FEATURES
-2. Definir primer transform de degradacion para RuinsModule en FEATURES
+1. Definir primer transform concreto de MineralModule en NOISE
+2. Ajustar balance de frecuencia de anclas/degradacion por bioma
 3. Ejecutar validacion integrada de avance Fase 3 (tests + runClient)
 
 ## Notas tecnicas importantes
