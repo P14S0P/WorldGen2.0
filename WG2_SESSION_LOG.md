@@ -204,12 +204,15 @@
 - TreeModule.java + TreeModuleTest.java + WG2Mod.java ✓ - base Fase 3 integrada (FEATURES) con validacion unitaria
 - Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.VegetationModuleTest --tests com.piasop.worldgen2.modules.phase3.TreeModuleTest` exitoso
 - Verificacion tecnica ✓ - `./gradlew build` exitoso
+- StructureModule.java + StructureModuleTest.java + WG2Mod.java ✓ - baseline Fase 3 integrado (FEATURES) con prototipos deterministas
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.TreeModuleTest --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso
 
 ### Pendiente:
-- Continuar Fase 3 con StructureModule base
+- Continuar Fase 3 con RuinsModule base
 
 ### Bugs conocidos:
 - Sin bloqueantes funcionales; performance sigue siendo el principal foco de mejora
 
 ### Proximo objetivo:
-- Implementar StructureModule base (spawn determinista controlado)
+- Implementar RuinsModule base (degradation pipeline minimo)

@@ -18,9 +18,10 @@ Ultima actualizacion: 2026-06-30
 - [x] OceanModule integrado al chunk final (piso oceanico + columna de agua en doFill)
 - [x] VegetationModule base (Fase 3: tabla clima+altitud, densidad/diversidad determinista)
 - [x] TreeModule base (Fase 3: potencial arboreo determinista + paleta parametrica)
+- [x] StructureModule baseline (Fase 3: mapa de oportunidad determinista + prototipos base)
 
 ## Modulo actual en desarrollo
-- StructureModule base (Fase 3) — fase: pendiente
+- RuinsModule base (Fase 3) — fase: pendiente
 
 ## Archivos existentes
 - WG2_SESSION_LOG.md
@@ -45,8 +46,8 @@ Ultima actualizacion: 2026-06-30
 - Sin bugs criticos bloqueantes reportados en Fase 2 tras hardening final
 
 ## Proxima sesion: hacer
-1. Definir base de StructureModule (spawn determinista controlado)
-2. Preparar RuinsModule baseline (degradation pipeline minimo)
+1. Preparar RuinsModule baseline (degradation pipeline minimo)
+2. Definir MineralModule base (estratigrafia inicial)
 3. Ejecutar validacion integrada de avance Fase 3 (tests + runClient)
 
 ## Notas tecnicas importantes
