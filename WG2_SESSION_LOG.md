@@ -175,3 +175,21 @@
 
 ### Proximo objetivo:
 - Arrancar Fase 3 con base de VegetationModule
+
+## Sesion 2026-06-30 (fase 3 vegetation base)
+### Completado:
+- VegetationModule.java ✓ - modulo base clima+altitud con densidad/diversidad determinista
+- WG2Mod.java ✓ - registro de wg2:vegetation en bootstrap
+- VegetationModuleTest.java ✓ - tests de tamaño de region, determinismo y penalizacion por altitud
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.VegetationModuleTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso y `runClient` inicia correctamente
+
+### Pendiente:
+- Iniciar TreeModule base (L-Systems parametrico minimo)
+- Definir base de StructuresModule (spawn determinista controlado)
+
+### Bugs conocidos:
+- Sin bugs criticos bloqueantes reportados para este corte
+
+### Proximo objetivo:
+- Continuar Fase 3 con TreeModule base

@@ -12,6 +12,7 @@ import com.piasop.worldgen2.modules.phase1.TerrainModule;
 import com.piasop.worldgen2.modules.phase2.CaveModule;
 import com.piasop.worldgen2.modules.phase2.OceanModule;
 import com.piasop.worldgen2.modules.phase2.RiverModule;
+import com.piasop.worldgen2.modules.phase3.VegetationModule;
 import com.piasop.worldgen2.threading.WG2ThreadPool;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraftforge.common.MinecraftForge;
@@ -61,6 +62,7 @@ public class WG2Mod {
         WG2Registry.register(new CaveModule());
         WG2Registry.register(new RiverModule());
         WG2Registry.register(new OceanModule());
+        WG2Registry.register(new VegetationModule());
     }
 
     @SubscribeEvent

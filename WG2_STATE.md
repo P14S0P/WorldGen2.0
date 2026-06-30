@@ -15,9 +15,10 @@ Ultima actualizacion: 2026-06-30
 - [x] RiverModule carve real de cauce en bloques (hook runtime en doFill)
 - [x] CaveModule carve real 3D en bloques (hook runtime en doFill)
 - [x] OceanModule integrado al chunk final (piso oceanico + columna de agua en doFill)
+- [x] VegetationModule base (Fase 3: tabla clima+altitud, densidad/diversidad determinista)
 
 ## Modulo actual en desarrollo
-- Fase 3 preparacion (Vegetation + Structures) — fase: inicio
+- TreeModule base (Fase 3) — fase: pendiente
 
 ## Archivos existentes
 - WG2_SESSION_LOG.md
@@ -40,9 +41,9 @@ Ultima actualizacion: 2026-06-30
 - Sin bugs criticos bloqueantes reportados en Fase 2 tras hardening final
 
 ## Proxima sesion: hacer
-1. Iniciar Fase 3 con base de VegetationModule (distribucion macro por clima/altura)
-2. Definir hook inicial para StructuresModule (spawn controlado y determinista)
-3. Ejecutar validacion integrada de entrada a Fase 3 (tests + runClient)
+1. Iniciar TreeModule base (L-Systems parametrico minimo)
+2. Definir base de StructuresModule (spawn determinista controlado)
+3. Ejecutar validacion integrada de avance Fase 3 (tests + runClient)
 
 ## Notas tecnicas importantes
 - Trabajar un modulo por sesion.
