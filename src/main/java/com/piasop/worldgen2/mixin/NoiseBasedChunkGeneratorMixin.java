@@ -40,6 +40,8 @@ import net.minecraftforge.registries.ForgeRegistries;
 import org.slf4j.Logger;
 
 import java.util.HashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
@@ -49,11 +51,13 @@ public abstract class NoiseBasedChunkGeneratorMixin {
     @Unique
     private static final Logger WG2_LOGGER = LogUtils.getLogger();
     @Unique
-    private static final int WG2_PROFILE_WINDOW_CHUNKS = 128;
+    private static final int WG2_PROFILE_WINDOW_CHUNKS = 1;
     @Unique
     private static final AtomicInteger wg2$profileChunkCounter = new AtomicInteger();
     @Unique
     private static final AtomicBoolean wg2$profileFlushLock = new AtomicBoolean(false);
+    @Unique
+    private static final AtomicBoolean wg2$profileHookLogged = new AtomicBoolean(false);
     @Unique
     private static final LongAdder wg2$oceanNs = new LongAdder();
     @Unique
@@ -82,65 +86,82 @@ public abstract class NoiseBasedChunkGeneratorMixin {
     @Final
     protected BiomeSource biomeSource;
 
-    @Inject(method = "doFill", at = @At("RETURN"))
+    @Inject(method = "fillFromNoise", at = @At("RETURN"), cancellable = true)
     private void wg2$injectTerrainCarvers(
+            Executor executor,
             Blender blender,
-            StructureManager structureManager,
             RandomState randomState,
+            StructureManager structureManager,
             ChunkAccess chunk,
-            int minCellY,
-            int cellHeight,
-            CallbackInfoReturnable<ChunkAccess> cir) {
+            CallbackInfoReturnable<CompletableFuture<ChunkAccess>> cir) {
         if (!WG2Config.enabled || WG2Config.vanillaCompat) {
             return;
         }
 
         long worldSeed = ((StructureManagerAccessor) structureManager).wg2$getWorldOptions().seed();
-        ChunkAccess outChunk = cir.getReturnValue();
-        OceanModule oceanModule = wg2$getModule("wg2:ocean", OceanModule.class);
-        CaveModule caveModule = wg2$getModule("wg2:caves", CaveModule.class);
-        RiverModule riverModule = wg2$getModule("wg2:rivers", RiverModule.class);
-        MineralModule mineralModule = wg2$getModule("wg2:minerals", MineralModule.class);
-        TreeModule treeModule = wg2$getModule("wg2:trees", TreeModule.class);
-        StructureModule structureModule = wg2$getModule("wg2:structures", StructureModule.class);
-        RuinsModule ruinsModule = wg2$getModule("wg2:ruins", RuinsModule.class);
-        if (oceanModule != null) {
-            long t0 = System.nanoTime();
-            oceanModule.applyOceanToChunk(outChunk, worldSeed);
-            wg2$oceanNs.add(System.nanoTime() - t0);
-        }
-        if (mineralModule != null) {
-            long t0 = System.nanoTime();
-            mineralModule.applyMineralStrataToChunk(outChunk, worldSeed);
-            wg2$mineralNs.add(System.nanoTime() - t0);
-        }
-        if (caveModule != null) {
-            long t0 = System.nanoTime();
-            caveModule.carveChunkCaves(outChunk, worldSeed);
-            wg2$caveNs.add(System.nanoTime() - t0);
-        }
-        if (riverModule != null) {
-            long t0 = System.nanoTime();
-            riverModule.carveChunkRivers(outChunk, worldSeed);
-            wg2$riverNs.add(System.nanoTime() - t0);
-        }
-        if (treeModule != null) {
-            long t0 = System.nanoTime();
-            treeModule.applyTreesToChunk(outChunk, worldSeed);
-            wg2$treeNs.add(System.nanoTime() - t0);
-        }
-        if (structureModule != null) {
-            long t0 = System.nanoTime();
-            structureModule.applyStructureAnchorsToChunk(outChunk, worldSeed);
-            wg2$structureNs.add(System.nanoTime() - t0);
-        }
-        if (ruinsModule != null) {
-            long t0 = System.nanoTime();
-            ruinsModule.applyRuinDegradationToChunk(outChunk, worldSeed);
-            wg2$ruinsNs.add(System.nanoTime() - t0);
-        }
+        CompletableFuture<ChunkAccess> original = cir.getReturnValue();
+        cir.setReturnValue(original.thenApply(outChunk -> {
+            OceanModule oceanModule = wg2$getModule("wg2:ocean", OceanModule.class);
+            CaveModule caveModule = wg2$getModule("wg2:caves", CaveModule.class);
+            RiverModule riverModule = wg2$getModule("wg2:rivers", RiverModule.class);
+            MineralModule mineralModule = wg2$getModule("wg2:minerals", MineralModule.class);
+            TreeModule treeModule = wg2$getModule("wg2:trees", TreeModule.class);
+            StructureModule structureModule = wg2$getModule("wg2:structures", StructureModule.class);
+            RuinsModule ruinsModule = wg2$getModule("wg2:ruins", RuinsModule.class);
 
-        wg2$maybeFlushProfileWindow();
+            if (wg2$profileHookLogged.compareAndSet(false, true)) {
+                WG2_LOGGER.warn(
+                        "WG2 profiler hook active in fillFromNoise.thenApply | modules present: ocean={}, mineral={}, cave={}, river={}, tree={}, structure={}, ruins={} | window={} chunk(s)",
+                        oceanModule != null,
+                        mineralModule != null,
+                        caveModule != null,
+                        riverModule != null,
+                        treeModule != null,
+                        structureModule != null,
+                        ruinsModule != null,
+                        WG2_PROFILE_WINDOW_CHUNKS
+                );
+                System.out.println("WG2 profiler hook active in fillFromNoise.thenApply (stdout)");
+            }
+            if (oceanModule != null) {
+                long t0 = System.nanoTime();
+                oceanModule.applyOceanToChunk(outChunk, worldSeed);
+                wg2$oceanNs.add(System.nanoTime() - t0);
+            }
+            if (mineralModule != null) {
+                long t0 = System.nanoTime();
+                mineralModule.applyMineralStrataToChunk(outChunk, worldSeed);
+                wg2$mineralNs.add(System.nanoTime() - t0);
+            }
+            if (caveModule != null) {
+                long t0 = System.nanoTime();
+                caveModule.carveChunkCaves(outChunk, worldSeed);
+                wg2$caveNs.add(System.nanoTime() - t0);
+            }
+            if (riverModule != null) {
+                long t0 = System.nanoTime();
+                riverModule.carveChunkRivers(outChunk, worldSeed);
+                wg2$riverNs.add(System.nanoTime() - t0);
+            }
+            if (treeModule != null) {
+                long t0 = System.nanoTime();
+                treeModule.applyTreesToChunk(outChunk, worldSeed);
+                wg2$treeNs.add(System.nanoTime() - t0);
+            }
+            if (structureModule != null) {
+                long t0 = System.nanoTime();
+                structureModule.applyStructureAnchorsToChunk(outChunk, worldSeed);
+                wg2$structureNs.add(System.nanoTime() - t0);
+            }
+            if (ruinsModule != null) {
+                long t0 = System.nanoTime();
+                ruinsModule.applyRuinDegradationToChunk(outChunk, worldSeed);
+                wg2$ruinsNs.add(System.nanoTime() - t0);
+            }
+
+            wg2$maybeFlushProfileWindow();
+            return outChunk;
+        }));
     }
 
     @Inject(method = "doCreateBiomes", at = @At("HEAD"), cancellable = true)
@@ -249,6 +270,7 @@ public abstract class NoiseBasedChunkGeneratorMixin {
 
             long totalNs = oceanNs + mineralNs + caveNs + riverNs + treeNs + structureNs + ruinsNs;
             if (totalNs <= 0L) {
+                WG2_LOGGER.warn("WG2 profile window completed but totalNs=0 (no module timings captured)");
                 return;
             }
 
@@ -294,6 +316,16 @@ public abstract class NoiseBasedChunkGeneratorMixin {
                     dominant,
                     wg2$fmtPct((dominantNs * 100.0) / totalNs)
             );
+            System.out.println("WG2 profile " + WG2_PROFILE_WINDOW_CHUNKS
+                    + " chunks | avg ms/chunk: ocean=" + wg2$fmtMs(oceanNs * invWindow)
+                    + "; mineral=" + wg2$fmtMs(mineralNs * invWindow)
+                    + "; cave=" + wg2$fmtMs(caveNs * invWindow)
+                    + "; river=" + wg2$fmtMs(riverNs * invWindow)
+                    + "; tree=" + wg2$fmtMs(treeNs * invWindow)
+                    + "; structure=" + wg2$fmtMs(structureNs * invWindow)
+                    + "; ruins=" + wg2$fmtMs(ruinsNs * invWindow)
+                    + " | total=" + wg2$fmtMs(totalNs * invWindow)
+                    + " | dominant=" + dominant + " (" + wg2$fmtPct((dominantNs * 100.0) / totalNs) + "%)");
         } finally {
             wg2$profileFlushLock.set(false);
         }
