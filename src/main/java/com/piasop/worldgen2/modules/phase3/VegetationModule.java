@@ -11,7 +11,6 @@ import com.piasop.worldgen2.modules.phase1.ClimateModule;
 import com.piasop.worldgen2.modules.phase1.Phase1Noise;
 import com.piasop.worldgen2.modules.phase1.TerrainModule;
 
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -67,12 +66,8 @@ public final class VegetationModule implements WG2Module {
 
         int baseChunkX = ctx.regionX() * size;
         int baseChunkZ = ctx.regionZ() * size;
-        Optional<ClimateModule> climate = WG2Registry.get("wg2:climate")
-                .filter(ClimateModule.class::isInstance)
-                .map(ClimateModule.class::cast);
-        Optional<TerrainModule> terrain = WG2Registry.get("wg2:terrain")
-                .filter(TerrainModule.class::isInstance)
-                .map(TerrainModule.class::cast);
+        ClimateModule climate = resolveClimateModule();
+        TerrainModule terrain = resolveTerrainModule();
 
         for (int rz = 0; rz < size; rz++) {
             for (int rx = 0; rx < size; rx++) {
@@ -80,12 +75,15 @@ public final class VegetationModule implements WG2Module {
                 int worldX = ((baseChunkX + rx) << 4) + 8;
                 int worldZ = ((baseChunkZ + rz) << 4) + 8;
 
-                float temp = climate.map(c -> c.sampleTemperature(worldX, worldZ, ctx.worldSeed()))
-                        .orElse((float) fallbackTemperature(worldX, worldZ, ctx.worldSeed()));
-                float precip = climate.map(c -> c.samplePrecipitation(worldX, worldZ, ctx.worldSeed()))
-                        .orElse((float) fallbackPrecipitation(worldX, worldZ, ctx.worldSeed()));
-                double elevation = terrain.map(t -> t.sampleHeight(worldX, worldZ, ctx.worldSeed()))
-                        .orElse(fallbackElevation(worldX, worldZ, ctx.worldSeed()));
+                float temp = climate != null
+                    ? climate.sampleTemperature(worldX, worldZ, ctx.worldSeed())
+                    : (float) fallbackTemperature(worldX, worldZ, ctx.worldSeed());
+                float precip = climate != null
+                    ? climate.samplePrecipitation(worldX, worldZ, ctx.worldSeed())
+                    : (float) fallbackPrecipitation(worldX, worldZ, ctx.worldSeed());
+                double elevation = terrain != null
+                    ? terrain.sampleHeight(worldX, worldZ, ctx.worldSeed())
+                    : fallbackElevation(worldX, worldZ, ctx.worldSeed());
 
                 density[idx] = (float) computeDensity(temp, precip, elevation);
                 diversity[idx] = (float) computeDiversity(temp, precip, worldX, worldZ, ctx.worldSeed());
@@ -168,6 +166,20 @@ public final class VegetationModule implements WG2Module {
         double macro = Phase1Noise.fbm2D(worldX * 0.0018, worldZ * 0.0018, seed + 331L, 4, 2.0, 0.5);
         double ridged = Phase1Noise.ridgedFbm2D(worldX * 0.0025, worldZ * 0.0025, seed + 991L, 3, 2.0, 0.5);
         return 80.0 + (macro * 28.0) + ((ridged - 0.5) * 36.0);
+    }
+
+    private ClimateModule resolveClimateModule() {
+        return WG2Registry.get("wg2:climate")
+                .filter(ClimateModule.class::isInstance)
+                .map(ClimateModule.class::cast)
+                .orElse(null);
+    }
+
+    private TerrainModule resolveTerrainModule() {
+        return WG2Registry.get("wg2:terrain")
+                .filter(TerrainModule.class::isInstance)
+                .map(TerrainModule.class::cast)
+                .orElse(null);
     }
 
     private static int index(int x, int z, int size) {

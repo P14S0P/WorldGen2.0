@@ -29,6 +29,12 @@ public final class MineralModule implements WG2Module {
     private static final int STRATA_MAX_Y = 70;
     private static final int STRATA_Y_STEP = 2;
     private static final float COLUMN_MIN_SIGNAL = 0.46f;
+        private static final MineralProfile[] DEFAULT_PROFILES = new MineralProfile[]{
+            new MineralProfile("sedimentary_iron", -8, 64, -32, 32),
+            new MineralProfile("metamorphic_copper", -24, 48, -48, 16),
+            new MineralProfile("igneous_gold", -40, 24, -64, -8),
+            new MineralProfile("deep_crystal_mix", -56, 8, -64, -24)
+        };
 
     private final RuinsModule fallbackRuins = new RuinsModule();
     private final ConcurrentHashMap<Long, MineralRegionData> regions = new ConcurrentHashMap<>();
@@ -76,7 +82,7 @@ public final class MineralModule implements WG2Module {
         float[] richness = new float[size * size];
         float[] deepBandBias = new float[size * size];
         byte[] layerProfile = new byte[size * size];
-        MineralProfile[] palette = defaultProfiles();
+        MineralProfile[] palette = DEFAULT_PROFILES;
         RuinsModule ruins = resolveRuinsModule();
 
         int baseChunkX = ctx.regionX() * size;
@@ -175,6 +181,8 @@ public final class MineralModule implements WG2Module {
 
     public void applyMineralStrataToChunk(ChunkAccess chunk, long seed) {
         ChunkPos chunkPos = chunk.getPos();
+        int chunkX = chunkPos.x;
+        int chunkZ = chunkPos.z;
         int minBuildY = chunk.getMinBuildHeight();
         int maxBuildY = minBuildY + chunk.getHeight() - 1;
         int baseX = chunkPos.getMinBlockX();
@@ -187,46 +195,79 @@ public final class MineralModule implements WG2Module {
         }
 
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
-        Optional<TerrainModule> terrain = WG2Registry.get("wg2:terrain")
-                .filter(TerrainModule.class::isInstance)
-                .map(TerrainModule.class::cast);
-        Optional<ClimateModule> climate = WG2Registry.get("wg2:climate")
-                .filter(ClimateModule.class::isInstance)
-                .map(ClimateModule.class::cast);
+        float chunkRichness = sampleRichnessForChunk(chunkX, chunkZ, seed);
+        float chunkDeepBias = sampleDeepBandBiasForChunk(chunkX, chunkZ, seed);
+        MineralProfile chunkProfile = sampleProfileForChunk(chunkX, chunkZ, seed);
+        DepositType chunkDepositType = depositTypeForProfile(chunkProfile);
+        BlockState chunkTarget = profileToState(chunkProfile.id());
+
+        TerrainModule terrain = resolveTerrainModule();
+        ClimateModule climate = resolveClimateModule();
         for (int localZ = 0; localZ < 16; localZ++) {
             for (int localX = 0; localX < 16; localX++) {
                 int worldX = baseX + localX;
                 int worldZ = baseZ + localZ;
-                float richness = sampleRichness(worldX, worldZ, seed);
-                float deepBias = sampleDeepBandBias(worldX, worldZ, seed);
-                double elevation = terrain.map(t -> t.sampleHeight(worldX, worldZ, seed)).orElse(90.0);
-                float temperature = climate.map(c -> c.sampleTemperature(worldX, worldZ, seed)).orElse(14.0f);
+            double elevation = terrain != null ? terrain.sampleHeight(worldX, worldZ, seed) : 90.0;
+            float temperature = climate != null ? climate.sampleTemperature(worldX, worldZ, seed) : 14.0f;
                 float contextual = computeContextualMineralModifier(elevation, temperature);
-                float tunedRichness = (float) clamp(richness * contextual, 0.0, 1.0);
-                if (((tunedRichness * 0.65f) + (deepBias * 0.35f)) < COLUMN_MIN_SIGNAL) {
+                float tunedRichness = (float) clamp(chunkRichness * contextual, 0.0, 1.0);
+                if (((tunedRichness * 0.65f) + (chunkDeepBias * 0.35f)) < COLUMN_MIN_SIGNAL) {
                     continue;
                 }
-                MineralProfile profile = sampleProfile(worldX, worldZ, seed);
-                BlockState target = profileToState(profile.id());
-                DepositType depositType = sampleDepositType(worldX, worldZ, seed);
+                double selectorX = worldX * 0.032;
+                double selectorZBase = worldZ * 0.017;
+                double selectorY = (minY * 0.041) + selectorZBase;
+                double selectorStep = STRATA_Y_STEP * 0.041;
 
                 for (int y = minY; y <= maxY; y += STRATA_Y_STEP) {
+                    double selector = (Phase1Noise.value2D(selectorX, selectorY, seed + 30757L) + 1.0) * 0.5;
+                    selectorY += selectorStep;
+                    if (!shouldApplyStrataAt(y, chunkProfile, tunedRichness, chunkDeepBias, selector)) {
+                        continue;
+                    }
+
                     cursor.set(worldX, y, worldZ);
                     BlockState current = chunk.getBlockState(cursor);
                     if (!isReplaceableHost(current.getBlock())) {
                         continue;
                     }
-
-                    double selector = (Phase1Noise.value2D(worldX * 0.032, (y * 0.041) + (worldZ * 0.017),
-                            seed + 30757L) + 1.0) * 0.5;
-                    if (!shouldApplyStrataAt(y, profile, tunedRichness, deepBias, selector)) {
-                        continue;
-                    }
-                    chunk.setBlockState(cursor, target, false);
-                    placeDepositOre(chunk, cursor, profile, depositType, y, selector);
+                    chunk.setBlockState(cursor, chunkTarget, false);
+                    placeDepositOre(chunk, cursor, chunkProfile.id(), chunkDepositType, y, selector);
                 }
             }
         }
+    }
+
+    private float sampleRichnessForChunk(int chunkX, int chunkZ, long seed) {
+        int regionX = Math.floorDiv(chunkX, REGION_SIZE);
+        int regionZ = Math.floorDiv(chunkZ, REGION_SIZE);
+        MineralRegionData data = regions.computeIfAbsent(regionKey(regionX, regionZ),
+                k -> generateRegionMinerals(new RegionGenContext(regionX, regionZ, seed)));
+        int localChunkX = Math.floorMod(chunkX, REGION_SIZE);
+        int localChunkZ = Math.floorMod(chunkZ, REGION_SIZE);
+        return data.richness()[index(localChunkX, localChunkZ, data.size())];
+    }
+
+    private float sampleDeepBandBiasForChunk(int chunkX, int chunkZ, long seed) {
+        int regionX = Math.floorDiv(chunkX, REGION_SIZE);
+        int regionZ = Math.floorDiv(chunkZ, REGION_SIZE);
+        MineralRegionData data = regions.computeIfAbsent(regionKey(regionX, regionZ),
+                k -> generateRegionMinerals(new RegionGenContext(regionX, regionZ, seed)));
+        int localChunkX = Math.floorMod(chunkX, REGION_SIZE);
+        int localChunkZ = Math.floorMod(chunkZ, REGION_SIZE);
+        return data.deepBandBias()[index(localChunkX, localChunkZ, data.size())];
+    }
+
+    private MineralProfile sampleProfileForChunk(int chunkX, int chunkZ, long seed) {
+        int regionX = Math.floorDiv(chunkX, REGION_SIZE);
+        int regionZ = Math.floorDiv(chunkZ, REGION_SIZE);
+        MineralRegionData data = regions.computeIfAbsent(regionKey(regionX, regionZ),
+                k -> generateRegionMinerals(new RegionGenContext(regionX, regionZ, seed)));
+        int localChunkX = Math.floorMod(chunkX, REGION_SIZE);
+        int localChunkZ = Math.floorMod(chunkZ, REGION_SIZE);
+        int idx = index(localChunkX, localChunkZ, data.size());
+        int paletteIdx = Byte.toUnsignedInt(data.layerProfile()[idx]);
+        return data.palette()[Math.min(paletteIdx, data.palette().length - 1)];
     }
 
     float computeContextualMineralModifier(double elevation, float temperature) {
@@ -248,12 +289,12 @@ public final class MineralModule implements WG2Module {
         return gate > (0.66 - (bandWeight * 0.08));
     }
 
-    private void placeDepositOre(ChunkAccess chunk, BlockPos.MutableBlockPos cursor, MineralProfile profile, DepositType depositType, int y, double selector) {
+    private void placeDepositOre(ChunkAccess chunk, BlockPos.MutableBlockPos cursor, String profileId, DepositType depositType, int y, double selector) {
         if (selector < 0.82) {
             return;
         }
 
-        BlockState oreState = switch (profile.id()) {
+        BlockState oreState = switch (profileId) {
             case "sedimentary_iron" -> y < 0 ? Blocks.DEEPSLATE_IRON_ORE.defaultBlockState() : Blocks.IRON_ORE.defaultBlockState();
             case "metamorphic_copper" -> y < 0 ? Blocks.DEEPSLATE_COPPER_ORE.defaultBlockState() : Blocks.COPPER_ORE.defaultBlockState();
             case "igneous_gold" -> y < 0 ? Blocks.DEEPSLATE_GOLD_ORE.defaultBlockState() : Blocks.GOLD_ORE.defaultBlockState();
@@ -264,8 +305,16 @@ public final class MineralModule implements WG2Module {
         if (depositType == DepositType.NODULE && selector < 0.93) {
             return;
         }
-        cursor.set(cursor.getX(), cursor.getY(), cursor.getZ());
         chunk.setBlockState(cursor, oreState, false);
+    }
+
+    private static DepositType depositTypeForProfile(MineralProfile profile) {
+        return switch (profile.id()) {
+            case "sedimentary_iron" -> DepositType.SEAM;
+            case "metamorphic_copper", "igneous_gold" -> DepositType.VEIN;
+            case "deep_crystal_mix" -> DepositType.NODULE;
+            default -> DepositType.MASSIVE;
+        };
     }
 
     private static boolean isReplaceableHost(Block block) {
@@ -292,13 +341,18 @@ public final class MineralModule implements WG2Module {
         return (byte) Math.max(0, Math.min(raw, paletteSize - 1));
     }
 
-    private static MineralProfile[] defaultProfiles() {
-        return new MineralProfile[]{
-                new MineralProfile("sedimentary_iron", -8, 64, -32, 32),
-                new MineralProfile("metamorphic_copper", -24, 48, -48, 16),
-                new MineralProfile("igneous_gold", -40, 24, -64, -8),
-                new MineralProfile("deep_crystal_mix", -56, 8, -64, -24)
-        };
+    private TerrainModule resolveTerrainModule() {
+        return WG2Registry.get("wg2:terrain")
+                .filter(TerrainModule.class::isInstance)
+                .map(TerrainModule.class::cast)
+                .orElse(null);
+    }
+
+    private ClimateModule resolveClimateModule() {
+        return WG2Registry.get("wg2:climate")
+                .filter(ClimateModule.class::isInstance)
+                .map(ClimateModule.class::cast)
+                .orElse(null);
     }
 
     private static int index(int x, int z, int size) {

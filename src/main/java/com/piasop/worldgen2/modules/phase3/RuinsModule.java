@@ -26,6 +26,12 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class RuinsModule implements WG2Module {
     private static final int REGION_SIZE = 32;
     private static final int SAMPLE_STEP = 8;
+    private static final RuinArchetype[] DEFAULT_PALETTE = new RuinArchetype[]{
+            new RuinArchetype("collapsed_hut", 0.20f, 0.55f, 0.45f),
+            new RuinArchetype("cracked_tower", 0.35f, 0.80f, 0.70f),
+            new RuinArchetype("sunken_foundation", 0.30f, 0.95f, 0.85f),
+            new RuinArchetype("scattered_wall_ring", 0.10f, 0.65f, 0.60f)
+    };
 
     private final StructureModule fallbackStructures = new StructureModule();
     private final ConcurrentHashMap<Long, RuinsRegionData> regions = new ConcurrentHashMap<>();
@@ -73,7 +79,7 @@ public final class RuinsModule implements WG2Module {
         float[] ruinChance = new float[size * size];
         float[] degradation = new float[size * size];
         byte[] archetypeIndex = new byte[size * size];
-        RuinArchetype[] palette = defaultPalette();
+        RuinArchetype[] palette = DEFAULT_PALETTE;
         StructureModule structures = resolveStructureModule();
 
         int baseChunkX = ctx.regionX() * size;
@@ -148,37 +154,38 @@ public final class RuinsModule implements WG2Module {
 
     public void applyRuinDegradationToChunk(ChunkAccess chunk, long seed) {
         ChunkPos chunkPos = chunk.getPos();
+        int chunkX = chunkPos.x;
+        int chunkZ = chunkPos.z;
         int minBuildY = chunk.getMinBuildHeight();
         int maxBuildY = minBuildY + chunk.getHeight() - 1;
         int baseX = chunkPos.getMinBlockX();
         int baseZ = chunkPos.getMinBlockZ();
+        int centerX = baseX + 8;
+        int centerZ = baseZ + 8;
+
+        float chance = sampleRuinChanceForChunk(chunkX, chunkZ, seed);
+        float degradationValue = sampleDegradationForChunk(chunkX, chunkZ, seed);
 
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
         BlockState mossy = Blocks.MOSSY_COBBLESTONE.defaultBlockState();
         BlockState air = Blocks.AIR.defaultBlockState();
-        Optional<ClimateModule> climate = WG2Registry.get("wg2:climate")
-            .filter(ClimateModule.class::isInstance)
-            .map(ClimateModule.class::cast);
-        Optional<TerrainModule> terrain = WG2Registry.get("wg2:terrain")
-            .filter(TerrainModule.class::isInstance)
-            .map(TerrainModule.class::cast);
+        ClimateModule climate = resolveClimateModule();
+        TerrainModule terrain = resolveTerrainModule();
+        float temp = climate != null ? climate.sampleTemperature(centerX, centerZ, seed) : 14.0f;
+        float precip = climate != null ? climate.samplePrecipitation(centerX, centerZ, seed) : 500.0f;
+        double elevation = terrain != null ? terrain.sampleHeight(centerX, centerZ, seed) : 90.0;
+        float contextual = computeContextualRuinModifier(temp, precip, elevation);
+        float tunedChance = (float) clamp(chance * contextual, 0.0, 1.0);
+        if (!shouldApplyDegradation(tunedChance, degradationValue)) {
+            return;
+        }
+        float moisture = (float) clamp((precip - 180.0) / 900.0, 0.0, 1.0);
 
         for (int localZ = 0; localZ < 16; localZ += SAMPLE_STEP) {
             for (int localX = 0; localX < 16; localX += SAMPLE_STEP) {
                 int worldX = baseX + localX;
                 int worldZ = baseZ + localZ;
-                float chance = sampleRuinChance(worldX, worldZ, seed);
-                float degradationValue = sampleDegradation(worldX, worldZ, seed);
-            float temp = climate.map(c -> c.sampleTemperature(worldX, worldZ, seed)).orElse(14.0f);
-            float precip = climate.map(c -> c.samplePrecipitation(worldX, worldZ, seed)).orElse(500.0f);
-            double elevation = terrain.map(t -> t.sampleHeight(worldX, worldZ, seed)).orElse(90.0);
-            float contextual = computeContextualRuinModifier(temp, precip, elevation);
-            float tunedChance = (float) clamp(chance * contextual, 0.0, 1.0);
-            if (!shouldApplyDegradation(tunedChance, degradationValue)) {
-                    continue;
-                }
-
                 int surfaceY = chunk.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, localX, localZ) - 1;
                 int targetY = clampInt(surfaceY + 1, minBuildY + 1, maxBuildY - 1);
                 cursor.set(worldX, targetY, worldZ);
@@ -188,11 +195,10 @@ public final class RuinsModule implements WG2Module {
                     continue;
                 }
 
-                float moisture = (float) clamp((precip - 180.0) / 900.0, 0.0, 1.0);
                 if (shouldCollapseBlock(current, degradationValue)) {
                     chunk.setBlockState(cursor, air, false);
-                    placeDebris(chunk, worldX, targetY - 1, worldZ, current, minBuildY);
-                    placeSediment(chunk, worldX, targetY, worldZ, moisture, maxBuildY);
+                    placeDebris(chunk, cursor, worldX, targetY - 1, worldZ, current, minBuildY);
+                    placeSediment(chunk, cursor, worldX, targetY, worldZ, moisture, maxBuildY);
                     continue;
                 }
 
@@ -201,10 +207,30 @@ public final class RuinsModule implements WG2Module {
                 }
 
                 if (shouldAddVines(degradationValue, moisture)) {
-                    placeVines(chunk, worldX, targetY + 1, worldZ, maxBuildY);
+                    placeVines(chunk, cursor, worldX, targetY + 1, worldZ, maxBuildY);
                 }
             }
         }
+    }
+
+    private float sampleRuinChanceForChunk(int chunkX, int chunkZ, long seed) {
+        int regionX = Math.floorDiv(chunkX, REGION_SIZE);
+        int regionZ = Math.floorDiv(chunkZ, REGION_SIZE);
+        RuinsRegionData data = regions.computeIfAbsent(regionKey(regionX, regionZ),
+                k -> generateRegionRuins(new RegionGenContext(regionX, regionZ, seed)));
+        int localChunkX = Math.floorMod(chunkX, REGION_SIZE);
+        int localChunkZ = Math.floorMod(chunkZ, REGION_SIZE);
+        return data.ruinChance()[index(localChunkX, localChunkZ, data.size())];
+    }
+
+    private float sampleDegradationForChunk(int chunkX, int chunkZ, long seed) {
+        int regionX = Math.floorDiv(chunkX, REGION_SIZE);
+        int regionZ = Math.floorDiv(chunkZ, REGION_SIZE);
+        RuinsRegionData data = regions.computeIfAbsent(regionKey(regionX, regionZ),
+                k -> generateRegionRuins(new RegionGenContext(regionX, regionZ, seed)));
+        int localChunkX = Math.floorMod(chunkX, REGION_SIZE);
+        int localChunkZ = Math.floorMod(chunkZ, REGION_SIZE);
+        return data.degradation()[index(localChunkX, localChunkZ, data.size())];
     }
 
     boolean shouldApplyDegradation(float ruinChance, float degradation) {
@@ -243,36 +269,36 @@ public final class RuinsModule implements WG2Module {
         return state.is(Blocks.COBBLESTONE) ? 1.0f : state.is(Blocks.STONE_BRICKS) ? 0.8f : 0.7f;
     }
 
-    private void placeDebris(ChunkAccess chunk, int worldX, int worldY, int worldZ, BlockState source, int minBuildY) {
+    private void placeDebris(ChunkAccess chunk, BlockPos.MutableBlockPos cursor, int worldX, int worldY, int worldZ, BlockState source, int minBuildY) {
         if (worldY <= minBuildY) {
             return;
         }
-        BlockPos.MutableBlockPos below = new BlockPos.MutableBlockPos(worldX, worldY, worldZ);
-        if (chunk.getBlockState(below).isAir()) {
-            chunk.setBlockState(below, source.is(Blocks.DEEPSLATE_BRICKS)
+        cursor.set(worldX, worldY, worldZ);
+        if (chunk.getBlockState(cursor).isAir()) {
+            chunk.setBlockState(cursor, source.is(Blocks.DEEPSLATE_BRICKS)
                     ? Blocks.COBBLED_DEEPSLATE.defaultBlockState()
                     : Blocks.COBBLESTONE.defaultBlockState(), false);
         }
     }
 
-    private void placeSediment(ChunkAccess chunk, int worldX, int worldY, int worldZ, float moisture, int maxBuildY) {
+    private void placeSediment(ChunkAccess chunk, BlockPos.MutableBlockPos cursor, int worldX, int worldY, int worldZ, float moisture, int maxBuildY) {
         if (worldY < 0 || worldY > maxBuildY) {
             return;
         }
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(worldX, worldY, worldZ);
-        if (!chunk.getBlockState(pos).isAir()) {
+        cursor.set(worldX, worldY, worldZ);
+        if (!chunk.getBlockState(cursor).isAir()) {
             return;
         }
-        chunk.setBlockState(pos, moisture > 0.42f ? Blocks.DIRT.defaultBlockState() : Blocks.SAND.defaultBlockState(), false);
+        chunk.setBlockState(cursor, moisture > 0.42f ? Blocks.DIRT.defaultBlockState() : Blocks.SAND.defaultBlockState(), false);
     }
 
-    private void placeVines(ChunkAccess chunk, int worldX, int worldY, int worldZ, int maxBuildY) {
+    private void placeVines(ChunkAccess chunk, BlockPos.MutableBlockPos cursor, int worldX, int worldY, int worldZ, int maxBuildY) {
         if (worldY > maxBuildY) {
             return;
         }
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(worldX, worldY, worldZ);
-        if (chunk.getBlockState(pos).isAir()) {
-            chunk.setBlockState(pos, Blocks.VINE.defaultBlockState(), false);
+        cursor.set(worldX, worldY, worldZ);
+        if (chunk.getBlockState(cursor).isAir()) {
+            chunk.setBlockState(cursor, Blocks.VINE.defaultBlockState(), false);
         }
     }
 
@@ -283,13 +309,18 @@ public final class RuinsModule implements WG2Module {
         return (byte) Math.max(0, Math.min(raw, paletteSize - 1));
     }
 
-    private static RuinArchetype[] defaultPalette() {
-        return new RuinArchetype[]{
-                new RuinArchetype("collapsed_hut", 0.20f, 0.55f, 0.45f),
-                new RuinArchetype("cracked_tower", 0.35f, 0.80f, 0.70f),
-                new RuinArchetype("sunken_foundation", 0.30f, 0.95f, 0.85f),
-                new RuinArchetype("scattered_wall_ring", 0.10f, 0.65f, 0.60f)
-        };
+    private ClimateModule resolveClimateModule() {
+        return WG2Registry.get("wg2:climate")
+                .filter(ClimateModule.class::isInstance)
+                .map(ClimateModule.class::cast)
+                .orElse(null);
+    }
+
+    private TerrainModule resolveTerrainModule() {
+        return WG2Registry.get("wg2:terrain")
+                .filter(TerrainModule.class::isInstance)
+                .map(TerrainModule.class::cast)
+                .orElse(null);
     }
 
     private static int index(int x, int z, int size) {

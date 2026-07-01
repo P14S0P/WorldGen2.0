@@ -1,5 +1,6 @@
 package com.piasop.worldgen2.mixin;
 
+import com.mojang.logging.LogUtils;
 import com.piasop.worldgen2.api.GenerationPhase;
 import com.piasop.worldgen2.api.RegionGenContext;
 import com.piasop.worldgen2.core.WG2Config;
@@ -30,17 +31,49 @@ import net.minecraft.world.level.levelgen.blending.Blender;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import net.minecraftforge.registries.ForgeRegistries;
+import org.slf4j.Logger;
 
 import java.util.HashMap;
-import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.LongAdder;
 
 @Mixin(NoiseBasedChunkGenerator.class)
 public abstract class NoiseBasedChunkGeneratorMixin {
+    @Unique
+    private static final Logger WG2_LOGGER = LogUtils.getLogger();
+    @Unique
+    private static final int WG2_PROFILE_WINDOW_CHUNKS = 128;
+    @Unique
+    private static final AtomicInteger wg2$profileChunkCounter = new AtomicInteger();
+    @Unique
+    private static final AtomicBoolean wg2$profileFlushLock = new AtomicBoolean(false);
+    @Unique
+    private static final LongAdder wg2$oceanNs = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$mineralNs = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$caveNs = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$riverNs = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$treeNs = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$structureNs = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$ruinsNs = new LongAdder();
+
+    @Unique
+    private static volatile BiomeModule wg2$cachedBiomeModule;
+    @Unique
+    private static volatile Holder<Biome>[] wg2$cachedBiomeLookup;
+
     @Shadow
     @Final
     private Holder<NoiseGeneratorSettings> settings;
@@ -64,34 +97,50 @@ public abstract class NoiseBasedChunkGeneratorMixin {
 
         long worldSeed = ((StructureManagerAccessor) structureManager).wg2$getWorldOptions().seed();
         ChunkAccess outChunk = cir.getReturnValue();
-        Optional<OceanModule> oceanModule = WG2Registry.get("wg2:ocean")
-            .filter(OceanModule.class::isInstance)
-            .map(OceanModule.class::cast);
-        Optional<CaveModule> caveModule = WG2Registry.get("wg2:caves")
-            .filter(CaveModule.class::isInstance)
-            .map(CaveModule.class::cast);
-        Optional<RiverModule> riverModule = WG2Registry.get("wg2:rivers")
-                .filter(RiverModule.class::isInstance)
-                .map(RiverModule.class::cast);
-        Optional<MineralModule> mineralModule = WG2Registry.get("wg2:minerals")
-            .filter(MineralModule.class::isInstance)
-            .map(MineralModule.class::cast);
-        Optional<TreeModule> treeModule = WG2Registry.get("wg2:trees")
-            .filter(TreeModule.class::isInstance)
-            .map(TreeModule.class::cast);
-        Optional<StructureModule> structureModule = WG2Registry.get("wg2:structures")
-            .filter(StructureModule.class::isInstance)
-            .map(StructureModule.class::cast);
-        Optional<RuinsModule> ruinsModule = WG2Registry.get("wg2:ruins")
-            .filter(RuinsModule.class::isInstance)
-            .map(RuinsModule.class::cast);
-        oceanModule.ifPresent(module -> module.applyOceanToChunk(outChunk, worldSeed));
-        mineralModule.ifPresent(module -> module.applyMineralStrataToChunk(outChunk, worldSeed));
-        caveModule.ifPresent(module -> module.carveChunkCaves(outChunk, worldSeed));
-        riverModule.ifPresent(module -> module.carveChunkRivers(outChunk, worldSeed));
-        treeModule.ifPresent(module -> module.applyTreesToChunk(outChunk, worldSeed));
-        structureModule.ifPresent(module -> module.applyStructureAnchorsToChunk(outChunk, worldSeed));
-        ruinsModule.ifPresent(module -> module.applyRuinDegradationToChunk(outChunk, worldSeed));
+        OceanModule oceanModule = wg2$getModule("wg2:ocean", OceanModule.class);
+        CaveModule caveModule = wg2$getModule("wg2:caves", CaveModule.class);
+        RiverModule riverModule = wg2$getModule("wg2:rivers", RiverModule.class);
+        MineralModule mineralModule = wg2$getModule("wg2:minerals", MineralModule.class);
+        TreeModule treeModule = wg2$getModule("wg2:trees", TreeModule.class);
+        StructureModule structureModule = wg2$getModule("wg2:structures", StructureModule.class);
+        RuinsModule ruinsModule = wg2$getModule("wg2:ruins", RuinsModule.class);
+        if (oceanModule != null) {
+            long t0 = System.nanoTime();
+            oceanModule.applyOceanToChunk(outChunk, worldSeed);
+            wg2$oceanNs.add(System.nanoTime() - t0);
+        }
+        if (mineralModule != null) {
+            long t0 = System.nanoTime();
+            mineralModule.applyMineralStrataToChunk(outChunk, worldSeed);
+            wg2$mineralNs.add(System.nanoTime() - t0);
+        }
+        if (caveModule != null) {
+            long t0 = System.nanoTime();
+            caveModule.carveChunkCaves(outChunk, worldSeed);
+            wg2$caveNs.add(System.nanoTime() - t0);
+        }
+        if (riverModule != null) {
+            long t0 = System.nanoTime();
+            riverModule.carveChunkRivers(outChunk, worldSeed);
+            wg2$riverNs.add(System.nanoTime() - t0);
+        }
+        if (treeModule != null) {
+            long t0 = System.nanoTime();
+            treeModule.applyTreesToChunk(outChunk, worldSeed);
+            wg2$treeNs.add(System.nanoTime() - t0);
+        }
+        if (structureModule != null) {
+            long t0 = System.nanoTime();
+            structureModule.applyStructureAnchorsToChunk(outChunk, worldSeed);
+            wg2$structureNs.add(System.nanoTime() - t0);
+        }
+        if (ruinsModule != null) {
+            long t0 = System.nanoTime();
+            ruinsModule.applyRuinDegradationToChunk(outChunk, worldSeed);
+            wg2$ruinsNs.add(System.nanoTime() - t0);
+        }
+
+        wg2$maybeFlushProfileWindow();
     }
 
     @Inject(method = "doCreateBiomes", at = @At("HEAD"), cancellable = true)
@@ -113,24 +162,15 @@ public abstract class NoiseBasedChunkGeneratorMixin {
 
         BiomeResolver vanillaResolver = BelowZeroRetrogen.getBiomeResolver(blender.getBiomeResolver(this.biomeSource), chunk);
 
-        Optional<ClimateModule> climateOpt = WG2Registry.get("wg2:climate").filter(ClimateModule.class::isInstance).map(ClimateModule.class::cast);
-        Optional<BiomeModule> biomeOpt = WG2Registry.get("wg2:biome").filter(BiomeModule.class::isInstance).map(BiomeModule.class::cast);
-        if (climateOpt.isEmpty() || biomeOpt.isEmpty()) {
+        ClimateModule climateModule = wg2$getModule("wg2:climate", ClimateModule.class);
+        BiomeModule biomeModule = wg2$getModule("wg2:biome", BiomeModule.class);
+        if (climateModule == null || biomeModule == null) {
             chunk.fillBiomesFromNoise(vanillaResolver, randomState.sampler());
             ci.cancel();
             return;
         }
 
-        ClimateModule climateModule = climateOpt.get();
-        BiomeModule biomeModule = biomeOpt.get();
-        Holder<Biome>[] biomeLookup = new Holder[16];
-        for (int packedIndex = 0; packedIndex < biomeLookup.length; packedIndex++) {
-            ResourceLocation id = biomeModule.biomeIdFromPackedIndex(packedIndex);
-            Biome biome = ForgeRegistries.BIOMES.getValue(id);
-            if (biome != null) {
-                biomeLookup[packedIndex] = Holder.direct(biome);
-            }
-        }
+        Holder<Biome>[] biomeLookup = wg2$getOrBuildBiomeLookup(biomeModule);
         HashMap<Long, Holder<Biome>> columnBiomeCache = new HashMap<>(64);
 
         BiomeResolver wg2Resolver = (quartX, quartY, quartZ, sampler) -> {
@@ -158,5 +198,114 @@ public abstract class NoiseBasedChunkGeneratorMixin {
 
         chunk.fillBiomesFromNoise(wg2Resolver, randomState.sampler());
         ci.cancel();
+    }
+
+    @Unique
+    private static Holder<Biome>[] wg2$getOrBuildBiomeLookup(BiomeModule biomeModule) {
+        Holder<Biome>[] cachedLookup = wg2$cachedBiomeLookup;
+        if (wg2$cachedBiomeModule == biomeModule && cachedLookup != null) {
+            return cachedLookup;
+        }
+
+        Holder<Biome>[] rebuilt = new Holder[16];
+        for (int packedIndex = 0; packedIndex < rebuilt.length; packedIndex++) {
+            ResourceLocation id = biomeModule.biomeIdFromPackedIndex(packedIndex);
+            Biome biome = ForgeRegistries.BIOMES.getValue(id);
+            if (biome != null) {
+                rebuilt[packedIndex] = Holder.direct(biome);
+            }
+        }
+        wg2$cachedBiomeModule = biomeModule;
+        wg2$cachedBiomeLookup = rebuilt;
+        return rebuilt;
+    }
+
+    @Unique
+    private static <T> T wg2$getModule(String id, Class<T> type) {
+        return WG2Registry.get(id)
+                .filter(type::isInstance)
+                .map(type::cast)
+                .orElse(null);
+    }
+
+    @Unique
+    private static void wg2$maybeFlushProfileWindow() {
+        int chunks = wg2$profileChunkCounter.incrementAndGet();
+        if (chunks % WG2_PROFILE_WINDOW_CHUNKS != 0) {
+            return;
+        }
+        if (!wg2$profileFlushLock.compareAndSet(false, true)) {
+            return;
+        }
+
+        try {
+            long oceanNs = wg2$oceanNs.sumThenReset();
+            long mineralNs = wg2$mineralNs.sumThenReset();
+            long caveNs = wg2$caveNs.sumThenReset();
+            long riverNs = wg2$riverNs.sumThenReset();
+            long treeNs = wg2$treeNs.sumThenReset();
+            long structureNs = wg2$structureNs.sumThenReset();
+            long ruinsNs = wg2$ruinsNs.sumThenReset();
+
+            long totalNs = oceanNs + mineralNs + caveNs + riverNs + treeNs + structureNs + ruinsNs;
+            if (totalNs <= 0L) {
+                return;
+            }
+
+            String dominant = "ocean";
+            long dominantNs = oceanNs;
+            if (mineralNs > dominantNs) {
+                dominant = "mineral";
+                dominantNs = mineralNs;
+            }
+            if (caveNs > dominantNs) {
+                dominant = "cave";
+                dominantNs = caveNs;
+            }
+            if (riverNs > dominantNs) {
+                dominant = "river";
+                dominantNs = riverNs;
+            }
+            if (treeNs > dominantNs) {
+                dominant = "tree";
+                dominantNs = treeNs;
+            }
+            if (structureNs > dominantNs) {
+                dominant = "structure";
+                dominantNs = structureNs;
+            }
+            if (ruinsNs > dominantNs) {
+                dominant = "ruins";
+                dominantNs = ruinsNs;
+            }
+
+            double invWindow = 1.0 / WG2_PROFILE_WINDOW_CHUNKS;
+            WG2_LOGGER.info(
+                    "WG2 profile {} chunks | avg ms/chunk: ocean={}; mineral={}; cave={}; river={}; tree={}; structure={}; ruins={} | total={} | dominant={} ({}%)",
+                    WG2_PROFILE_WINDOW_CHUNKS,
+                    wg2$fmtMs(oceanNs * invWindow),
+                    wg2$fmtMs(mineralNs * invWindow),
+                    wg2$fmtMs(caveNs * invWindow),
+                    wg2$fmtMs(riverNs * invWindow),
+                    wg2$fmtMs(treeNs * invWindow),
+                    wg2$fmtMs(structureNs * invWindow),
+                    wg2$fmtMs(ruinsNs * invWindow),
+                    wg2$fmtMs(totalNs * invWindow),
+                    dominant,
+                    wg2$fmtPct((dominantNs * 100.0) / totalNs)
+            );
+        } finally {
+            wg2$profileFlushLock.set(false);
+        }
+    }
+
+    @Unique
+    private static String wg2$fmtMs(double ns) {
+        return String.format("%.3f", ns / 1_000_000.0);
+    }
+
+    @Unique
+    private static String wg2$fmtPct(double pct) {
+        return String.format("%.1f", pct);
     }
 }

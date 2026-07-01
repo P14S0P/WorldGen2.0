@@ -17,6 +17,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.Heightmap;
 
+import java.util.Set;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -27,10 +28,19 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class TreeModule implements WG2Module {
     private static final int REGION_SIZE = 32;
     private static final int SAMPLE_STEP = 8;
+    private static final TreePrototype[] DEFAULT_PALETTE = new TreePrototype[]{
+            new TreePrototype("oak_lowland", SpeciesStyle.OAK, 7, 11, 3, 5, 25.0, 4, 5),
+            new TreePrototype("birch_temperate", SpeciesStyle.BIRCH, 8, 12, 2, 4, 18.0, 4, 5),
+            new TreePrototype("pine_cool", SpeciesStyle.PINE, 10, 16, 2, 3, 22.0, 5, 6),
+            new TreePrototype("acacia_dry", SpeciesStyle.ACACIA, 6, 9, 4, 6, 32.0, 3, 4),
+            new TreePrototype("willow_riparian", SpeciesStyle.WILLOW, 7, 11, 4, 6, 28.0, 4, 5),
+            new TreePrototype("jungle_humid", SpeciesStyle.JUNGLE, 11, 16, 4, 7, 24.0, 5, 6)
+    };
 
     private final VegetationModule vegetation = new VegetationModule();
     private final LSystemRenderer renderer = new LSystemRenderer();
     private final ConcurrentHashMap<Long, TreeRegionData> regions = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<Long, PackedRenderedTree> renderedPrototypeCache = new ConcurrentHashMap<>();
 
     @Override
     public String getId() {
@@ -77,7 +87,7 @@ public final class TreeModule implements WG2Module {
 
         int baseChunkX = ctx.regionX() * size;
         int baseChunkZ = ctx.regionZ() * size;
-        TreePrototype[] palette = defaultPalette();
+        TreePrototype[] palette = DEFAULT_PALETTE;
 
         for (int rz = 0; rz < size; rz++) {
             for (int rx = 0; rx < size; rx++) {
@@ -137,50 +147,83 @@ public final class TreeModule implements WG2Module {
 
     public void applyTreesToChunk(ChunkAccess chunk, long seed) {
         ChunkPos chunkPos = chunk.getPos();
+        int chunkX = chunkPos.x;
+        int chunkZ = chunkPos.z;
         int minBuildY = chunk.getMinBuildHeight();
         int maxBuildY = minBuildY + chunk.getHeight() - 1;
         int baseX = chunkPos.getMinBlockX();
         int baseZ = chunkPos.getMinBlockZ();
-        Optional<ClimateModule> climate = WG2Registry.get("wg2:climate")
-                .filter(ClimateModule.class::isInstance)
-                .map(ClimateModule.class::cast);
-        Optional<TerrainModule> terrain = WG2Registry.get("wg2:terrain")
-                .filter(TerrainModule.class::isInstance)
-                .map(TerrainModule.class::cast);
+        int centerX = baseX + 8;
+        int centerZ = baseZ + 8;
+        TreeCellSample chunkSample = sampleTreeCellForChunk(chunkX, chunkZ, seed);
+        float chunkDensity = chunkSample.density();
+        if (chunkDensity < 0.64f) {
+            return;
+        }
+        TreePrototype chunkPrototype = chunkSample.prototype();
+        ClimateModule climate = resolveClimateModule();
+        TerrainModule terrain = resolveTerrainModule();
+        float chunkPrecipitation = climate != null ? climate.samplePrecipitation(centerX, centerZ, seed) : 500.0f;
+        float chunkMoisture = (float) clamp((chunkPrecipitation - 180.0) / 900.0, 0.0, 1.0);
+        double chunkElevation = terrain != null ? terrain.sampleHeight(centerX, centerZ, seed) : 90.0;
+        double chunkWindTilt = clamp((chunkElevation - 100.0) / 220.0, 0.0, 1.0) * 8.0;
+        PackedRenderedTree chunkLayout = renderPrototypeCached(chunkPrototype, chunkMoisture, chunkWindTilt);
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
 
         for (int localZ = 0; localZ < 16; localZ += SAMPLE_STEP) {
             for (int localX = 0; localX < 16; localX += SAMPLE_STEP) {
                 int worldX = baseX + localX;
                 int worldZ = baseZ + localZ;
-                float density = sampleTreeDensity(worldX, worldZ, seed);
-                if (density < 0.64f) {
-                    continue;
-                }
-
                 double jitter = (Phase1Noise.value2D(worldX * 0.033, worldZ * 0.033, seed + 41813L) + 1.0) * 0.5;
-                if (((density * 0.82) + (jitter * 0.18)) < 0.72) {
+                if (((chunkDensity * 0.82) + (jitter * 0.18)) < 0.72) {
                     continue;
                 }
-
-                TreePrototype prototype = samplePrototype(worldX, worldZ, seed);
-                float precipitation = climate.map(c -> c.samplePrecipitation(worldX, worldZ, seed)).orElse(500.0f);
-                float moisture = (float) clamp((precipitation - 180.0) / 900.0, 0.0, 1.0);
-                double elevation = terrain.map(t -> t.sampleHeight(worldX, worldZ, seed)).orElse(90.0);
-                double windTilt = clamp((elevation - 100.0) / 220.0, 0.0, 1.0) * 8.0;
-                LSystemRenderer.RenderedTree layout = renderPrototype(prototype, moisture, windTilt);
 
                 int surfaceY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, localX, localZ) - 1;
                 int trunkBaseY = clampInt(surfaceY + 1, minBuildY + 1, maxBuildY - 8);
-                placeRenderedTree(chunk, cursor, layout, prototype, baseX + localX, trunkBaseY, baseZ + localZ, minBuildY, maxBuildY);
+                placeRenderedTree(chunk, cursor, chunkLayout, chunkPrototype, baseX + localX, trunkBaseY, baseZ + localZ, minBuildY, maxBuildY);
             }
         }
+    }
+
+    private TreeCellSample sampleTreeCellForChunk(int chunkX, int chunkZ, long seed) {
+        int regionX = Math.floorDiv(chunkX, REGION_SIZE);
+        int regionZ = Math.floorDiv(chunkZ, REGION_SIZE);
+        TreeRegionData data = regions.computeIfAbsent(regionKey(regionX, regionZ),
+                k -> generateRegionTrees(new RegionGenContext(regionX, regionZ, seed)));
+
+        int localChunkX = Math.floorMod(chunkX, REGION_SIZE);
+        int localChunkZ = Math.floorMod(chunkZ, REGION_SIZE);
+        int idx = index(localChunkX, localChunkZ, data.size());
+        float density = data.treeDensity()[idx];
+        int paletteIdx = Byte.toUnsignedInt(data.prototypeIndex()[idx]);
+        TreePrototype prototype = data.palette()[Math.min(paletteIdx, data.palette().length - 1)];
+        return new TreeCellSample(density, prototype);
+    }
+
+    private TreeCellSample sampleTreeCell(int worldX, int worldZ, long seed) {
+        int chunkX = Math.floorDiv(worldX, 16);
+        int chunkZ = Math.floorDiv(worldZ, 16);
+        return sampleTreeCellForChunk(chunkX, chunkZ, seed);
+    }
+
+    private PackedRenderedTree renderPrototypeCached(TreePrototype prototype, float moisture, double windTiltDegrees) {
+        int moistureBucket = Math.max(0, Math.min(16, (int) Math.round(clamp(moisture, 0.0, 1.0) * 16.0)));
+        int windBucket = Math.max(0, Math.min(16, (int) Math.round(clamp(windTiltDegrees / 8.0, 0.0, 1.0) * 16.0)));
+        long key = (((long) prototype.style().ordinal()) << 32)
+                | (((long) moistureBucket & 0xffffL) << 16)
+                | ((long) windBucket & 0xffffL);
+        return renderedPrototypeCache.computeIfAbsent(key, k -> {
+            float moistureQuantized = moistureBucket / 16.0f;
+            double windQuantized = (windBucket / 16.0) * 8.0;
+            return packRenderedTree(renderPrototype(prototype, moistureQuantized, windQuantized));
+        });
     }
 
     private void placeRenderedTree(
             ChunkAccess chunk,
             BlockPos.MutableBlockPos cursor,
-            LSystemRenderer.RenderedTree layout,
+            PackedRenderedTree layout,
             TreePrototype prototype,
             int baseX,
             int baseY,
@@ -194,10 +237,11 @@ public final class TreeModule implements WG2Module {
         int chunkMinZ = chunk.getPos().getMinBlockZ();
         int chunkMaxZ = chunkMinZ + 15;
 
-        for (LSystemRenderer.Voxel voxel : layout.logs()) {
-            int worldX = baseX + voxel.x();
-            int worldY = baseY + voxel.y();
-            int worldZ = baseZ + voxel.z();
+        int[] logs = layout.logs();
+        for (int i = 0; i < logs.length; i += 3) {
+            int worldX = baseX + logs[i];
+            int worldY = baseY + logs[i + 1];
+            int worldZ = baseZ + logs[i + 2];
             if (worldX < chunkMinX || worldX > chunkMaxX || worldZ < chunkMinZ || worldZ > chunkMaxZ) {
                 continue;
             }
@@ -208,10 +252,11 @@ public final class TreeModule implements WG2Module {
             chunk.setBlockState(cursor, logState, false);
         }
 
-        for (LSystemRenderer.Voxel voxel : layout.leaves()) {
-            int worldX = baseX + voxel.x();
-            int worldY = baseY + voxel.y();
-            int worldZ = baseZ + voxel.z();
+        int[] leaves = layout.leaves();
+        for (int i = 0; i < leaves.length; i += 3) {
+            int worldX = baseX + leaves[i];
+            int worldY = baseY + leaves[i + 1];
+            int worldZ = baseZ + leaves[i + 2];
             if (worldX < chunkMinX || worldX > chunkMaxX || worldZ < chunkMinZ || worldZ > chunkMaxZ) {
                 continue;
             }
@@ -243,15 +288,18 @@ public final class TreeModule implements WG2Module {
         return (byte) Math.max(0, Math.min(raw, paletteSize - 1));
     }
 
-    private static TreePrototype[] defaultPalette() {
-        return new TreePrototype[]{
-                new TreePrototype("oak_lowland", SpeciesStyle.OAK, 7, 11, 3, 5, 25.0, 4, 5),
-                new TreePrototype("birch_temperate", SpeciesStyle.BIRCH, 8, 12, 2, 4, 18.0, 4, 5),
-                new TreePrototype("pine_cool", SpeciesStyle.PINE, 10, 16, 2, 3, 22.0, 5, 6),
-                new TreePrototype("acacia_dry", SpeciesStyle.ACACIA, 6, 9, 4, 6, 32.0, 3, 4),
-                new TreePrototype("willow_riparian", SpeciesStyle.WILLOW, 7, 11, 4, 6, 28.0, 4, 5),
-                new TreePrototype("jungle_humid", SpeciesStyle.JUNGLE, 11, 16, 4, 7, 24.0, 5, 6)
-        };
+    private ClimateModule resolveClimateModule() {
+        return WG2Registry.get("wg2:climate")
+                .filter(ClimateModule.class::isInstance)
+                .map(ClimateModule.class::cast)
+                .orElse(null);
+    }
+
+    private TerrainModule resolveTerrainModule() {
+        return WG2Registry.get("wg2:terrain")
+                .filter(TerrainModule.class::isInstance)
+                .map(TerrainModule.class::cast)
+                .orElse(null);
     }
 
     private static BlockState prototypeLogState(TreePrototype prototype) {
@@ -290,6 +338,21 @@ public final class TreeModule implements WG2Module {
         return Math.max(min, Math.min(max, value));
     }
 
+    private static PackedRenderedTree packRenderedTree(LSystemRenderer.RenderedTree rendered) {
+        return new PackedRenderedTree(packVoxels(rendered.logs()), packVoxels(rendered.leaves()));
+    }
+
+    private static int[] packVoxels(Set<LSystemRenderer.Voxel> voxels) {
+        int[] packed = new int[voxels.size() * 3];
+        int i = 0;
+        for (LSystemRenderer.Voxel voxel : voxels) {
+            packed[i++] = voxel.x();
+            packed[i++] = voxel.y();
+            packed[i++] = voxel.z();
+        }
+        return packed;
+    }
+
     public enum SpeciesStyle {
         OAK,
         WILLOW,
@@ -316,5 +379,11 @@ public final class TreeModule implements WG2Module {
     }
 
     public record TreeRegionData(int size, float[] treeDensity, byte[] prototypeIndex, TreePrototype[] palette) {
+    }
+
+    private record TreeCellSample(float density, TreePrototype prototype) {
+    }
+
+    private record PackedRenderedTree(int[] logs, int[] leaves) {
     }
 }

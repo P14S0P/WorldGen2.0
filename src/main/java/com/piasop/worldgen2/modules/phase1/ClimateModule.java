@@ -74,8 +74,8 @@ public final class ClimateModule implements WG2Module {
                 int worldX = ((baseChunkX + rx) << 4) + 8;
                 int worldZ = ((baseChunkZ + rz) << 4) + 8;
 
-                float temp = sampleTemperature(worldX, worldZ, ctx.worldSeed());
-                float precip = samplePrecipitation(worldX, worldZ, ctx.worldSeed());
+                float temp = sampleTemperatureRaw(worldX, worldZ, ctx.worldSeed());
+                float precip = samplePrecipitationRaw(worldX, worldZ, ctx.worldSeed());
 
                 temperature[idx] = temp;
                 precipitation[idx] = precip;
@@ -88,6 +88,11 @@ public final class ClimateModule implements WG2Module {
     }
 
     public float sampleTemperature(int worldX, int worldZ, long seed) {
+        RegionClimateGrid region = resolveRegionForWorld(worldX, worldZ, seed);
+        return region.temperature()[localChunkIndex(worldX, worldZ)];
+    }
+
+    private float sampleTemperatureRaw(int worldX, int worldZ, long seed) {
         double latitude = Math.abs(worldZ) / 100000.0;
         double tempBase = Math.cos(latitude * Math.PI) * 30.0 - 5.0;
         double localVariation = Phase1Noise.fbm2D(worldX * 0.0008, worldZ * 0.0008, seed + 7001L, 3, 2.0, 0.5) * 6.0;
@@ -95,11 +100,33 @@ public final class ClimateModule implements WG2Module {
     }
 
     public float samplePrecipitation(int worldX, int worldZ, long seed) {
+        RegionClimateGrid region = resolveRegionForWorld(worldX, worldZ, seed);
+        return region.precipitation()[localChunkIndex(worldX, worldZ)];
+    }
+
+    private float samplePrecipitationRaw(int worldX, int worldZ, long seed) {
         double oceanNoise = (Phase1Noise.value2D(worldX * 0.0004, worldZ * 0.0004, seed + 8803L) + 1.0) * 0.5;
         double moistureNoise = (Phase1Noise.fbm2D(worldX * 0.0015, worldZ * 0.0015, seed + 9901L, 4, 2.0, 0.5) + 1.0) * 0.5;
         double basePrecip = 200.0 + (oceanNoise * 350.0) + (moistureNoise * 300.0);
         double orographic = sampleOrographicFactor(worldX, worldZ, seed);
         return (float) clamp(basePrecip * (1.0 + (orographic * 0.8)), 100.0, 1400.0);
+    }
+
+    private RegionClimateGrid resolveRegionForWorld(int worldX, int worldZ, long seed) {
+        int chunkX = Math.floorDiv(worldX, 16);
+        int chunkZ = Math.floorDiv(worldZ, 16);
+        int regionX = Math.floorDiv(chunkX, REGION_SIZE);
+        int regionZ = Math.floorDiv(chunkZ, REGION_SIZE);
+        return climateByRegion.computeIfAbsent(regionKey(regionX, regionZ),
+                unused -> generateRegionClimate(new RegionGenContext(regionX, regionZ, seed)));
+    }
+
+    private static int localChunkIndex(int worldX, int worldZ) {
+        int chunkX = Math.floorDiv(worldX, 16);
+        int chunkZ = Math.floorDiv(worldZ, 16);
+        int localX = Math.floorMod(chunkX, REGION_SIZE);
+        int localZ = Math.floorMod(chunkZ, REGION_SIZE);
+        return (localZ * REGION_SIZE) + localX;
     }
 
     private double sampleOrographicFactor(int worldX, int worldZ, long seed) {
