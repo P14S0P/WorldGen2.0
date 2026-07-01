@@ -17,7 +17,6 @@ import net.minecraft.world.level.levelgen.Heightmap;
 
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -29,6 +28,7 @@ public final class RiverModule implements WG2Module {
     private static final int WATERLINE_Y = 62;
 
     private final ConcurrentHashMap<Long, RiverRegionData> regions = new ConcurrentHashMap<>();
+    private final TerrainModule fallbackTerrain = buildFallbackTerrain();
 
     @Override
     public String getId() {
@@ -77,15 +77,14 @@ public final class RiverModule implements WG2Module {
 
         int baseChunkX = ctx.regionX() * size;
         int baseChunkZ = ctx.regionZ() * size;
-        Optional<TerrainModule> terrain = WG2Registry.get("wg2:terrain").filter(TerrainModule.class::isInstance).map(TerrainModule.class::cast);
+        TerrainModule terrain = resolveTerrainModule();
 
         for (int rz = 0; rz < size; rz++) {
             for (int rx = 0; rx < size; rx++) {
                 int idx = index(rx, rz, size);
                 int worldX = ((baseChunkX + rx) << 4) + 8;
                 int worldZ = ((baseChunkZ + rz) << 4) + 8;
-                heights[idx] = terrain.map(t -> t.sampleHeight(worldX, worldZ, ctx.worldSeed()))
-                        .orElseGet(() -> fallbackHeight(worldX, worldZ, ctx.worldSeed()));
+                heights[idx] = terrain.sampleHeight(worldX, worldZ, ctx.worldSeed());
             }
         }
 
@@ -249,14 +248,21 @@ public final class RiverModule implements WG2Module {
         return 2 + (int) Math.floor(clamp(mask, 0.0, 1.0) * 6.0);
     }
 
-    private static double fallbackHeight(int worldX, int worldZ, long seed) {
-        double macro = Phase1Noise.fbm2D(worldX * 0.0018, worldZ * 0.0018, seed + 701L, 4, 2.0, 0.5);
-        double detail = Phase1Noise.ridgedFbm2D(worldX * 0.0027, worldZ * 0.0027, seed + 1777L, 3, 2.0, 0.5);
-        return 72.0 + (macro * 24.0) + ((detail - 0.5) * 22.0);
-    }
-
     private static int index(int x, int z, int size) {
         return (z * size) + x;
+    }
+
+    private TerrainModule resolveTerrainModule() {
+        return WG2Registry.get("wg2:terrain")
+                .filter(TerrainModule.class::isInstance)
+                .map(TerrainModule.class::cast)
+                .orElse(fallbackTerrain);
+    }
+
+    private static TerrainModule buildFallbackTerrain() {
+        TerrainModule module = new TerrainModule();
+        module.initialize(WG2Config.INSTANCE, WG2DataCache.INSTANCE);
+        return module;
     }
 
     private static long regionKey(int rx, int rz) {

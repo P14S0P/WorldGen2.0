@@ -2,8 +2,10 @@
   "required": true,
   "minVersion": "0.8",
   "package": "com.piasop.worldgen2.mixin",
+  "refmap": "worldgen2.refmap.json",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
+    "NoiseChunkMixin",
     "NoiseBasedChunkGeneratorMixin",
     "StructureManagerAccessor"
   ],

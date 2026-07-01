@@ -22,10 +22,10 @@ import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.biome.BiomeResolver;
 import net.minecraft.world.level.biome.BiomeSource;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.BelowZeroRetrogen;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
-import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
 import org.spongepowered.asm.mixin.Final;
@@ -51,7 +51,7 @@ public abstract class NoiseBasedChunkGeneratorMixin {
     @Unique
     private static final Logger WG2_LOGGER = LogUtils.getLogger();
     @Unique
-    private static final int WG2_PROFILE_WINDOW_CHUNKS = 1;
+    private static final int WG2_PROFILE_WINDOW_CHUNKS = 32;
     @Unique
     private static final AtomicInteger wg2$profileChunkCounter = new AtomicInteger();
     @Unique
@@ -72,19 +72,25 @@ public abstract class NoiseBasedChunkGeneratorMixin {
     private static final LongAdder wg2$structureNs = new LongAdder();
     @Unique
     private static final LongAdder wg2$ruinsNs = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$oceanDominantChunks = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$mineralDominantChunks = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$caveDominantChunks = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$riverDominantChunks = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$treeDominantChunks = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$structureDominantChunks = new LongAdder();
+    @Unique
+    private static final LongAdder wg2$ruinsDominantChunks = new LongAdder();
 
     @Unique
     private static volatile BiomeModule wg2$cachedBiomeModule;
     @Unique
     private static volatile Holder<Biome>[] wg2$cachedBiomeLookup;
-
-    @Shadow
-    @Final
-    private Holder<NoiseGeneratorSettings> settings;
-
-    @Shadow
-    @Final
-    protected BiomeSource biomeSource;
 
     @Inject(method = "fillFromNoise", at = @At("RETURN"), cancellable = true)
     private void wg2$injectTerrainCarvers(
@@ -121,44 +127,58 @@ public abstract class NoiseBasedChunkGeneratorMixin {
                         ruinsModule != null,
                         WG2_PROFILE_WINDOW_CHUNKS
                 );
-                System.out.println("WG2 profiler hook active in fillFromNoise.thenApply (stdout)");
             }
-            if (oceanModule != null) {
-                long t0 = System.nanoTime();
-                oceanModule.applyOceanToChunk(outChunk, worldSeed);
-                wg2$oceanNs.add(System.nanoTime() - t0);
-            }
+            long oceanNs = 0L;
+            long mineralNs = 0L;
+            long caveNs = 0L;
+            long riverNs = 0L;
+            long treeNs = 0L;
+            long structureNs = 0L;
+            long ruinsNs = 0L;
             if (mineralModule != null) {
                 long t0 = System.nanoTime();
                 mineralModule.applyMineralStrataToChunk(outChunk, worldSeed);
-                wg2$mineralNs.add(System.nanoTime() - t0);
+                mineralNs = System.nanoTime() - t0;
+                wg2$mineralNs.add(mineralNs);
             }
             if (caveModule != null) {
                 long t0 = System.nanoTime();
                 caveModule.carveChunkCaves(outChunk, worldSeed);
-                wg2$caveNs.add(System.nanoTime() - t0);
+                caveNs = System.nanoTime() - t0;
+                wg2$caveNs.add(caveNs);
             }
             if (riverModule != null) {
                 long t0 = System.nanoTime();
                 riverModule.carveChunkRivers(outChunk, worldSeed);
-                wg2$riverNs.add(System.nanoTime() - t0);
+                riverNs = System.nanoTime() - t0;
+                wg2$riverNs.add(riverNs);
+            }
+            if (oceanModule != null) {
+                long t0 = System.nanoTime();
+                oceanModule.applyOceanToChunk(outChunk, worldSeed);
+                oceanNs = System.nanoTime() - t0;
+                wg2$oceanNs.add(oceanNs);
             }
             if (treeModule != null) {
                 long t0 = System.nanoTime();
                 treeModule.applyTreesToChunk(outChunk, worldSeed);
-                wg2$treeNs.add(System.nanoTime() - t0);
+                treeNs = System.nanoTime() - t0;
+                wg2$treeNs.add(treeNs);
             }
             if (structureModule != null) {
                 long t0 = System.nanoTime();
                 structureModule.applyStructureAnchorsToChunk(outChunk, worldSeed);
-                wg2$structureNs.add(System.nanoTime() - t0);
+                structureNs = System.nanoTime() - t0;
+                wg2$structureNs.add(structureNs);
             }
             if (ruinsModule != null) {
                 long t0 = System.nanoTime();
                 ruinsModule.applyRuinDegradationToChunk(outChunk, worldSeed);
-                wg2$ruinsNs.add(System.nanoTime() - t0);
+                ruinsNs = System.nanoTime() - t0;
+                wg2$ruinsNs.add(ruinsNs);
             }
 
+            wg2$recordDominantChunk(oceanNs, mineralNs, caveNs, riverNs, treeNs, structureNs, ruinsNs);
             wg2$maybeFlushProfileWindow();
             return outChunk;
         }));
@@ -181,7 +201,8 @@ public abstract class NoiseBasedChunkGeneratorMixin {
         WG2Mod.dispatchRegionLoad(GenerationPhase.MACRO, new RegionGenContext(Math.floorDiv(chunkX, 32), Math.floorDiv(chunkZ, 32), worldSeed));
         WG2Mod.dispatchRegionLoad(GenerationPhase.REGIONAL, new RegionGenContext(Math.floorDiv(chunkX, 8), Math.floorDiv(chunkZ, 8), worldSeed));
 
-        BiomeResolver vanillaResolver = BelowZeroRetrogen.getBiomeResolver(blender.getBiomeResolver(this.biomeSource), chunk);
+        BiomeSource baseBiomeSource = ((ChunkGenerator) (Object) this).getBiomeSource();
+        BiomeResolver vanillaResolver = BelowZeroRetrogen.getBiomeResolver(blender.getBiomeResolver(baseBiomeSource), chunk);
 
         ClimateModule climateModule = wg2$getModule("wg2:climate", ClimateModule.class);
         BiomeModule biomeModule = wg2$getModule("wg2:biome", BiomeModule.class);
@@ -222,6 +243,7 @@ public abstract class NoiseBasedChunkGeneratorMixin {
     }
 
     @Unique
+    @SuppressWarnings("unchecked")
     private static Holder<Biome>[] wg2$getOrBuildBiomeLookup(BiomeModule biomeModule) {
         Holder<Biome>[] cachedLookup = wg2$cachedBiomeLookup;
         if (wg2$cachedBiomeModule == biomeModule && cachedLookup != null) {
@@ -267,6 +289,13 @@ public abstract class NoiseBasedChunkGeneratorMixin {
             long treeNs = wg2$treeNs.sumThenReset();
             long structureNs = wg2$structureNs.sumThenReset();
             long ruinsNs = wg2$ruinsNs.sumThenReset();
+            long oceanDominantChunks = wg2$oceanDominantChunks.sumThenReset();
+            long mineralDominantChunks = wg2$mineralDominantChunks.sumThenReset();
+            long caveDominantChunks = wg2$caveDominantChunks.sumThenReset();
+            long riverDominantChunks = wg2$riverDominantChunks.sumThenReset();
+            long treeDominantChunks = wg2$treeDominantChunks.sumThenReset();
+            long structureDominantChunks = wg2$structureDominantChunks.sumThenReset();
+            long ruinsDominantChunks = wg2$ruinsDominantChunks.sumThenReset();
 
             long totalNs = oceanNs + mineralNs + caveNs + riverNs + treeNs + structureNs + ruinsNs;
             if (totalNs <= 0L) {
@@ -303,7 +332,7 @@ public abstract class NoiseBasedChunkGeneratorMixin {
 
             double invWindow = 1.0 / WG2_PROFILE_WINDOW_CHUNKS;
             WG2_LOGGER.info(
-                    "WG2 profile {} chunks | avg ms/chunk: ocean={}; mineral={}; cave={}; river={}; tree={}; structure={}; ruins={} | total={} | dominant={} ({}%)",
+                    "WG2 profile {} chunks | avg ms/chunk: ocean={}; mineral={}; cave={}; river={}; tree={}; structure={}; ruins={} | total={} | dominant-by-time={} ({}%) | dominant-chunks: ocean={}; mineral={}; cave={}; river={}; tree={}; structure={}; ruins={}",
                     WG2_PROFILE_WINDOW_CHUNKS,
                     wg2$fmtMs(oceanNs * invWindow),
                     wg2$fmtMs(mineralNs * invWindow),
@@ -314,20 +343,65 @@ public abstract class NoiseBasedChunkGeneratorMixin {
                     wg2$fmtMs(ruinsNs * invWindow),
                     wg2$fmtMs(totalNs * invWindow),
                     dominant,
-                    wg2$fmtPct((dominantNs * 100.0) / totalNs)
+                    wg2$fmtPct((dominantNs * 100.0) / totalNs),
+                    oceanDominantChunks,
+                    mineralDominantChunks,
+                    caveDominantChunks,
+                    riverDominantChunks,
+                    treeDominantChunks,
+                    structureDominantChunks,
+                    ruinsDominantChunks
             );
-            System.out.println("WG2 profile " + WG2_PROFILE_WINDOW_CHUNKS
-                    + " chunks | avg ms/chunk: ocean=" + wg2$fmtMs(oceanNs * invWindow)
-                    + "; mineral=" + wg2$fmtMs(mineralNs * invWindow)
-                    + "; cave=" + wg2$fmtMs(caveNs * invWindow)
-                    + "; river=" + wg2$fmtMs(riverNs * invWindow)
-                    + "; tree=" + wg2$fmtMs(treeNs * invWindow)
-                    + "; structure=" + wg2$fmtMs(structureNs * invWindow)
-                    + "; ruins=" + wg2$fmtMs(ruinsNs * invWindow)
-                    + " | total=" + wg2$fmtMs(totalNs * invWindow)
-                    + " | dominant=" + dominant + " (" + wg2$fmtPct((dominantNs * 100.0) / totalNs) + "%)");
         } finally {
             wg2$profileFlushLock.set(false);
+        }
+    }
+
+    @Unique
+    private static void wg2$recordDominantChunk(
+            long oceanNs,
+            long mineralNs,
+            long caveNs,
+            long riverNs,
+            long treeNs,
+            long structureNs,
+            long ruinsNs) {
+        String dominant = "ocean";
+        long dominantNs = oceanNs;
+        if (mineralNs > dominantNs) {
+            dominant = "mineral";
+            dominantNs = mineralNs;
+        }
+        if (caveNs > dominantNs) {
+            dominant = "cave";
+            dominantNs = caveNs;
+        }
+        if (riverNs > dominantNs) {
+            dominant = "river";
+            dominantNs = riverNs;
+        }
+        if (treeNs > dominantNs) {
+            dominant = "tree";
+            dominantNs = treeNs;
+        }
+        if (structureNs > dominantNs) {
+            dominant = "structure";
+            dominantNs = structureNs;
+        }
+        if (ruinsNs > dominantNs) {
+            dominant = "ruins";
+        }
+
+        switch (dominant) {
+            case "ocean" -> wg2$oceanDominantChunks.increment();
+            case "mineral" -> wg2$mineralDominantChunks.increment();
+            case "cave" -> wg2$caveDominantChunks.increment();
+            case "river" -> wg2$riverDominantChunks.increment();
+            case "tree" -> wg2$treeDominantChunks.increment();
+            case "structure" -> wg2$structureDominantChunks.increment();
+            case "ruins" -> wg2$ruinsDominantChunks.increment();
+            default -> {
+            }
         }
     }
 

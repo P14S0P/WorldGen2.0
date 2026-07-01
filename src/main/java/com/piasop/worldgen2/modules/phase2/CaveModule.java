@@ -12,15 +12,20 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
  * Phase 2 cave prototype: domain-warped worm field with vertical cave bands.
  */
 public final class CaveModule implements WG2Module {
     private static final double CARVE_THRESHOLD = 0.74;
-    private static final int MAX_CARVE_Y = 84;
+    private static final int MAX_CARVE_Y = 56;
+    private static final int SEA_LEVEL = 63;
+    private static final int SURFACE_ROOF_THICKNESS = 10;
     private static final int Y_STEP = 2;
     private static final double COLUMN_GATE_THRESHOLD = 0.43;
+
+    private record ColumnCaveProfile(double shape, double detail, double tube, int worldX, int worldZ, long seed) {}
 
     private WG2DataCache cache;
 
@@ -86,6 +91,7 @@ public final class CaveModule implements WG2Module {
         int baseZ = chunkPos.getMinBlockZ();
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         BlockState air = Blocks.AIR.defaultBlockState();
+        BlockState water = Blocks.WATER.defaultBlockState();
 
         for (int localZ = 0; localZ < 16; localZ++) {
             for (int localX = 0; localX < 16; localX++) {
@@ -96,9 +102,11 @@ public final class CaveModule implements WG2Module {
                     continue;
                 }
 
+                ColumnCaveProfile profile = buildColumnProfile(worldX, worldZ, seed);
+
                 for (int yi = 0; yi < yCount; yi++) {
                     int y = carveMinY + (yi * Y_STEP);
-                    if (shouldCarveAt(worldX, y, worldZ, seed)) {
+                    if (shouldCarveAt(profile, y)) {
                         initial[voxelIndex(localX, localZ, yi, yCount)] = true;
                     }
                 }
@@ -123,31 +131,78 @@ public final class CaveModule implements WG2Module {
             for (int localX = 0; localX < 16; localX++) {
                 int worldX = baseX + localX;
                 int worldZ = baseZ + localZ;
+                int solidSurfaceY = chunk.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, localX, localZ) - 1;
+                solidSurfaceY = clampInt(solidSurfaceY, minBuildY, maxBuildY);
+                int worldSurfaceY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, localX, localZ) - 1;
+                worldSurfaceY = clampInt(worldSurfaceY, minBuildY, maxBuildY);
+                boolean submergedColumn = worldSurfaceY > solidSurfaceY;
                 for (int yi = 0; yi < yCount; yi++) {
                     if (!smooth[voxelIndex(localX, localZ, yi, yCount)]) {
                         continue;
                     }
 
                     int y = carveMinY + (yi * Y_STEP);
-                    carveVoxel(chunk, cursor, air, worldX, y, worldZ);
-                    carveVoxel(chunk, cursor, air, worldX, y + 1, worldZ);
+                    if (y > solidSurfaceY - SURFACE_ROOF_THICKNESS) {
+                        continue;
+                    }
+
+                    carveAt(chunk, cursor, air, water, worldX, worldZ, y - 1, solidSurfaceY, submergedColumn, minBuildY);
+                    carveAt(chunk, cursor, air, water, worldX, worldZ, y, solidSurfaceY, submergedColumn, minBuildY);
+                    carveAt(chunk, cursor, air, water, worldX, worldZ, y + 1, solidSurfaceY, submergedColumn, minBuildY);
                 }
             }
         }
     }
 
+    private static void carveAt(
+            ChunkAccess chunk,
+            BlockPos.MutableBlockPos cursor,
+            BlockState air,
+            BlockState water,
+            int worldX,
+            int worldZ,
+            int y,
+            int solidSurfaceY,
+            boolean submergedColumn,
+            int minBuildY) {
+        if (y <= minBuildY || y > solidSurfaceY - SURFACE_ROOF_THICKNESS) {
+            return;
+        }
+        BlockState carveState = (submergedColumn && y <= SEA_LEVEL) ? water : air;
+        carveVoxel(chunk, cursor, carveState, worldX, y, worldZ);
+    }
+
     boolean shouldCarveAt(int worldX, int worldY, int worldZ, long seed) {
-        double likelihood = sampleCaveCarveLikelihood(worldX, worldY, worldZ, seed);
+        ColumnCaveProfile profile = buildColumnProfile(worldX, worldZ, seed);
+        return shouldCarveAt(profile, worldY);
+    }
+
+    private static boolean shouldCarveAt(ColumnCaveProfile profile, int worldY) {
+        double likelihood = sampleCaveCarveLikelihood(profile, worldY);
         if (likelihood < CARVE_THRESHOLD) {
             return false;
         }
 
-        double tube = (Phase1Noise.fbm2D(worldX * 0.030, worldZ * 0.030, seed + 1993L, 2, 2.0, 0.5) + 1.0) * 0.5;
-        double verticalNoise = (Phase1Noise.value2D(worldX * 0.021, (worldY * 0.021) + (worldZ * 0.007), seed + 2647L) + 1.0) * 0.5;
-        return (tube * 0.55) + (verticalNoise * 0.45) > 0.48;
+        double verticalNoise = (Phase1Noise.value2D(
+                profile.worldX() * 0.021,
+                (worldY * 0.021) + (profile.worldZ() * 0.007),
+                profile.seed() + 2647L
+        ) + 1.0) * 0.5;
+        return (profile.tube() * 0.55) + (verticalNoise * 0.45) > 0.48;
     }
 
     public double sampleCaveCarveLikelihood(int worldX, int worldY, int worldZ, long seed) {
+        ColumnCaveProfile profile = buildColumnProfile(worldX, worldZ, seed);
+        return sampleCaveCarveLikelihood(profile, worldY);
+    }
+
+    private static double sampleCaveCarveLikelihood(ColumnCaveProfile profile, int worldY) {
+        double vertical = verticalBand(worldY);
+        double abyssal = abyssalBand(worldY);
+        return clamp((profile.shape() * 0.45) + (profile.detail() * 0.28) + (vertical * 0.17) + (abyssal * 0.10), 0.0, 1.0);
+    }
+
+    private static ColumnCaveProfile buildColumnProfile(int worldX, int worldZ, long seed) {
         double warpX = Phase1Noise.fbm2D(worldX * 0.007, worldZ * 0.007, seed + 401L, 3, 2.0, 0.5) * 18.0;
         double warpZ = Phase1Noise.fbm2D(worldX * 0.007, worldZ * 0.007, seed + 809L, 3, 2.0, 0.5) * 18.0;
 
@@ -158,9 +213,8 @@ public final class CaveModule implements WG2Module {
         double shape = 1.0 - Math.abs(worm * 0.5);
 
         double detail = (Phase1Noise.fbm2D(wx * 0.012, wz * 0.012, seed + 1237L, 4, 2.1, 0.48) + 1.0) * 0.5;
-        double vertical = verticalBand(worldY);
-        double abyssal = abyssalBand(worldY);
-        return clamp((shape * 0.45) + (detail * 0.28) + (vertical * 0.17) + (abyssal * 0.10), 0.0, 1.0);
+        double tube = (Phase1Noise.fbm2D(worldX * 0.030, worldZ * 0.030, seed + 1993L, 2, 2.0, 0.5) + 1.0) * 0.5;
+        return new ColumnCaveProfile(shape, detail, tube, worldX, worldZ, seed);
     }
 
     private static double abyssalBand(int y) {
@@ -209,16 +263,20 @@ public final class CaveModule implements WG2Module {
     private static void carveVoxel(
             ChunkAccess chunk,
             BlockPos.MutableBlockPos cursor,
-            BlockState air,
+            BlockState carveState,
             int worldX,
             int y,
             int worldZ) {
         cursor.set(worldX, y, worldZ);
         BlockState current = chunk.getBlockState(cursor);
-        if (current.isAir() || current.getFluidState().isSource()) {
+        boolean targetIsAir = carveState.is(Blocks.AIR);
+        if (targetIsAir && (current.isAir() || current.getFluidState().isSource())) {
             return;
         }
-        chunk.setBlockState(cursor, air, false);
+        if (!targetIsAir && current.getFluidState().isSource()) {
+            return;
+        }
+        chunk.setBlockState(cursor, carveState, false);
     }
 
     private static double verticalBand(int y) {
@@ -228,6 +286,10 @@ public final class CaveModule implements WG2Module {
     }
 
     private static double clamp(double value, double min, double max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static int clampInt(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 }

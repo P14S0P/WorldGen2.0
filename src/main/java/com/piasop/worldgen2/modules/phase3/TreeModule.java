@@ -10,7 +10,9 @@ import com.piasop.worldgen2.core.WG2Registry;
 import com.piasop.worldgen2.modules.phase1.ClimateModule;
 import com.piasop.worldgen2.modules.phase1.Phase1Noise;
 import com.piasop.worldgen2.modules.phase1.TerrainModule;
+import com.piasop.worldgen2.modules.phase2.OceanModule;
 import net.minecraft.core.BlockPos;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -28,6 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class TreeModule implements WG2Module {
     private static final int REGION_SIZE = 32;
     private static final int SAMPLE_STEP = 8;
+    private static final int CHUNK_EDGE_MARGIN = 4;
     private static final TreePrototype[] DEFAULT_PALETTE = new TreePrototype[]{
             new TreePrototype("oak_lowland", SpeciesStyle.OAK, 7, 11, 3, 5, 25.0, 4, 5),
             new TreePrototype("birch_temperate", SpeciesStyle.BIRCH, 8, 12, 2, 4, 18.0, 4, 5),
@@ -167,11 +170,17 @@ public final class TreeModule implements WG2Module {
         float chunkMoisture = (float) clamp((chunkPrecipitation - 180.0) / 900.0, 0.0, 1.0);
         double chunkElevation = terrain != null ? terrain.sampleHeight(centerX, centerZ, seed) : 90.0;
         double chunkWindTilt = clamp((chunkElevation - 100.0) / 220.0, 0.0, 1.0) * 8.0;
+        OceanModule ocean = resolveOceanModule();
         PackedRenderedTree chunkLayout = renderPrototypeCached(chunkPrototype, chunkMoisture, chunkWindTilt);
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
 
         for (int localZ = 0; localZ < 16; localZ += SAMPLE_STEP) {
             for (int localX = 0; localX < 16; localX += SAMPLE_STEP) {
+                if (localX < CHUNK_EDGE_MARGIN || localX > (15 - CHUNK_EDGE_MARGIN)
+                        || localZ < CHUNK_EDGE_MARGIN || localZ > (15 - CHUNK_EDGE_MARGIN)) {
+                    continue;
+                }
+
                 int worldX = baseX + localX;
                 int worldZ = baseZ + localZ;
                 double jitter = (Phase1Noise.value2D(worldX * 0.033, worldZ * 0.033, seed + 41813L) + 1.0) * 0.5;
@@ -179,7 +188,26 @@ public final class TreeModule implements WG2Module {
                     continue;
                 }
 
+                if (ocean != null && ocean.sampleOceanMask(worldX, worldZ, seed) >= 0.5f) {
+                    continue;
+                }
+
                 int surfaceY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, localX, localZ) - 1;
+                int oceanFloorY = chunk.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, localX, localZ) - 1;
+                // Skip submerged columns; on dry land WORLD_SURFACE and OCEAN_FLOOR are typically equal.
+                if (surfaceY < oceanFloorY) {
+                    continue;
+                }
+
+                cursor.set(worldX, surfaceY, worldZ);
+                BlockState supportState = chunk.getBlockState(cursor);
+                if (supportState.isAir() || !supportState.getFluidState().isEmpty()) {
+                    continue;
+                }
+                if (!isNaturalTreeSupport(supportState)) {
+                    continue;
+                }
+
                 int trunkBaseY = clampInt(surfaceY + 1, minBuildY + 1, maxBuildY - 8);
                 placeRenderedTree(chunk, cursor, chunkLayout, chunkPrototype, baseX + localX, trunkBaseY, baseZ + localZ, minBuildY, maxBuildY);
             }
@@ -300,6 +328,25 @@ public final class TreeModule implements WG2Module {
                 .filter(TerrainModule.class::isInstance)
                 .map(TerrainModule.class::cast)
                 .orElse(null);
+    }
+
+    private OceanModule resolveOceanModule() {
+        return WG2Registry.get("wg2:ocean")
+                .filter(OceanModule.class::isInstance)
+                .map(OceanModule.class::cast)
+                .orElse(null);
+    }
+
+    private static boolean isNaturalTreeSupport(BlockState supportState) {
+        return supportState.is(BlockTags.DIRT)
+                || supportState.is(Blocks.GRASS_BLOCK)
+                || supportState.is(Blocks.MYCELIUM)
+                || supportState.is(Blocks.PODZOL)
+                || supportState.is(Blocks.COARSE_DIRT)
+                || supportState.is(Blocks.ROOTED_DIRT)
+                || supportState.is(Blocks.MUD)
+                || supportState.is(Blocks.SAND)
+                || supportState.is(Blocks.RED_SAND);
     }
 
     private static BlockState prototypeLogState(TreePrototype prototype) {

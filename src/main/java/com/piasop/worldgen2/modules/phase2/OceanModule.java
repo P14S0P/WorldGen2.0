@@ -23,6 +23,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class OceanModule implements WG2Module {
     private static final int REGION_SIZE = 32;
     private static final int DEFAULT_SEA_LEVEL = 63;
+    private static final float OCEAN_CONTINENTALNESS_THRESHOLD = 0.42f;
+    private static final float OCEAN_MASK_TRANSITION = 0.16f;
+    private static final float OCEAN_APPLY_MASK_THRESHOLD = 0.70f;
 
     private final ConcurrentHashMap<Long, OceanRegionData> regions = new ConcurrentHashMap<>();
 
@@ -79,10 +82,14 @@ public final class OceanModule implements WG2Module {
                 int worldZ = ((baseChunkZ + rz) << 4) + 8;
 
                 float continentalness = sampleContinentalness(worldX, worldZ, ctx.worldSeed());
-                boolean ocean = continentalness < 0.46f;
-                oceanMask[idx] = ocean ? 1.0f : 0.0f;
-                floorY[idx] = ocean ? (float) computeOceanFloor(worldX, worldZ, ctx.worldSeed(), continentalness)
-                        : DEFAULT_SEA_LEVEL;
+                float mask = (float) clamp(
+                    (OCEAN_CONTINENTALNESS_THRESHOLD - continentalness) / OCEAN_MASK_TRANSITION,
+                    0.0,
+                    1.0);
+                oceanMask[idx] = mask;
+                floorY[idx] = mask > 0.0f
+                    ? (float) computeOceanFloor(worldX, worldZ, ctx.worldSeed(), continentalness)
+                    : DEFAULT_SEA_LEVEL;
             }
         }
 
@@ -137,18 +144,29 @@ public final class OceanModule implements WG2Module {
                 int worldZ = baseZ + localZ;
 
                 float oceanMask = sampleOceanMask(worldX, worldZ, seed);
-                if (oceanMask < 0.5f) {
+                if (oceanMask < OCEAN_APPLY_MASK_THRESHOLD) {
                     continue;
                 }
 
                 int targetFloorY = Math.round(sampleOceanFloorY(worldX, worldZ, seed));
                 targetFloorY = clampInt(targetFloorY, minBuildY + 5, DEFAULT_SEA_LEVEL - 1);
 
-                int currentFloorY = chunk.getHeight(Heightmap.Types.OCEAN_FLOOR_WG, localX, localZ) - 1;
-                currentFloorY = clampInt(currentFloorY, minBuildY, maxBuildY);
+                int currentSurfaceY = chunk.getHeight(Heightmap.Types.WORLD_SURFACE_WG, localX, localZ) - 1;
+                currentSurfaceY = clampInt(currentSurfaceY, minBuildY, maxBuildY);
 
-                if (currentFloorY > targetFloorY) {
-                    for (int y = currentFloorY; y > targetFloorY; y--) {
+                // Keep high terrain stable unless the ocean signal is extremely strong.
+                if (currentSurfaceY > DEFAULT_SEA_LEVEL + 20) {
+                    continue;
+                }
+                if (currentSurfaceY > DEFAULT_SEA_LEVEL + 4 && oceanMask < 0.82f) {
+                    continue;
+                }
+                if (currentSurfaceY - targetFloorY > 30 && oceanMask < 0.90f) {
+                    continue;
+                }
+
+                if (currentSurfaceY > targetFloorY) {
+                    for (int y = currentSurfaceY; y > targetFloorY; y--) {
                         cursor.set(worldX, y, worldZ);
                         if (y <= DEFAULT_SEA_LEVEL) {
                             chunk.setBlockState(cursor, water, false);
@@ -158,7 +176,7 @@ public final class OceanModule implements WG2Module {
                     }
                 }
 
-                int fillFrom = Math.max(targetFloorY + 1, currentFloorY + 1);
+                int fillFrom = targetFloorY + 1;
                 for (int y = fillFrom; y <= DEFAULT_SEA_LEVEL && y <= maxBuildY; y++) {
                     cursor.set(worldX, y, worldZ);
                     chunk.setBlockState(cursor, water, false);

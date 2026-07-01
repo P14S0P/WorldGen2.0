@@ -101,7 +101,9 @@ public final class LSystemRenderer {
         }
 
         static TurtleState root(double windTiltDegrees) {
-            return new TurtleState(0.0, 0.0, 0.0, 90.0, windTiltDegrees, 0.0);
+            double clampedWindTilt = clamp(windTiltDegrees, -20.0, 20.0);
+            // Start nearly vertical so trees grow upward; wind only adds a slight lean.
+            return new TurtleState(0.0, 0.0, 0.0, 90.0, 90.0 - clampedWindTilt, 0.0);
         }
 
         TurtleState copy() {

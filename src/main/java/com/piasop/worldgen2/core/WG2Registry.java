@@ -68,7 +68,7 @@ public final class WG2Registry {
 
     private static List<WG2Module> resolveInitializationOrder() {
         List<WG2Module> modules = new ArrayList<>(MODULES.values());
-        modules.sort(Comparator.comparingInt(WG2Module::getPriority));
+        modules.sort(Comparator.comparingInt(WG2Module::getPriority).thenComparing(WG2Module::getId));
 
         List<WG2Module> ordered = new ArrayList<>();
         Map<String, WG2Module> byId = new LinkedHashMap<>();
