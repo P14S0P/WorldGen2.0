@@ -56,4 +56,17 @@ class RuinsModuleTest {
         assertTrue(stressed > mild);
         assertTrue(stressed >= 0.60f && stressed <= 1.15f);
     }
+
+    @Test
+    void collapseGateDependsOnWeaknessAndDamage() {
+        assertTrue(module.shouldCollapseWithWeakness(1.0f, 0.90f));
+        assertTrue(!module.shouldCollapseWithWeakness(0.8f, 0.40f));
+    }
+
+    @Test
+    void vinesNeedMoistureAndDamage() {
+        assertTrue(module.shouldAddVines(0.70f, 0.75f));
+        assertTrue(!module.shouldAddVines(0.30f, 0.75f));
+        assertTrue(!module.shouldAddVines(0.70f, 0.20f));
+    }
 }

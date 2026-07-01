@@ -37,7 +37,7 @@ public final class ClimateModule implements WG2Module {
 
     @Override
     public boolean canRunAsync() {
-        return true;
+        return false;
     }
 
     @Override

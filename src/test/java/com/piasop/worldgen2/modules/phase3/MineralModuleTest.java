@@ -57,4 +57,18 @@ class MineralModuleTest {
         assertTrue(mountainsCold > plainsWarm);
         assertTrue(mountainsCold >= 0.70f && mountainsCold <= 1.25f);
     }
+
+    @Test
+    void depositTypeIsDeterministic() {
+        MineralModule.DepositType first = module.sampleDepositType(-992, 208, 1001L);
+        MineralModule.DepositType second = module.sampleDepositType(-992, 208, 1001L);
+        assertEquals(first, second);
+    }
+
+    @Test
+    void nearbyDepositQueryIsDeterministic() {
+        boolean a = module.hasDeposit(0, 0, 77L, 2);
+        boolean b = module.hasDeposit(0, 0, 77L, 2);
+        assertEquals(a, b);
+    }
 }

@@ -13,6 +13,7 @@ import com.piasop.worldgen2.modules.phase2.RiverModule;
 import com.piasop.worldgen2.modules.phase3.MineralModule;
 import com.piasop.worldgen2.modules.phase3.RuinsModule;
 import com.piasop.worldgen2.modules.phase3.StructureModule;
+import com.piasop.worldgen2.modules.phase3.TreeModule;
 import net.minecraft.core.Holder;
 import net.minecraft.core.QuartPos;
 import net.minecraft.resources.ResourceLocation;
@@ -23,7 +24,6 @@ import net.minecraft.world.level.biome.BiomeSource;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.BelowZeroRetrogen;
 import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
-import net.minecraft.world.level.levelgen.NoiseChunk;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.blending.Blender;
@@ -36,6 +36,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import net.minecraftforge.registries.ForgeRegistries;
 
+import java.util.HashMap;
 import java.util.Optional;
 
 @Mixin(NoiseBasedChunkGenerator.class)
@@ -47,11 +48,6 @@ public abstract class NoiseBasedChunkGeneratorMixin {
     @Shadow
     @Final
     protected BiomeSource biomeSource;
-
-    @Shadow
-    private NoiseChunk createNoiseChunk(ChunkAccess chunk, StructureManager structureManager, Blender blender, RandomState randomState) {
-        throw new IllegalStateException("Mixin shadow");
-    }
 
     @Inject(method = "doFill", at = @At("RETURN"))
     private void wg2$injectTerrainCarvers(
@@ -80,6 +76,9 @@ public abstract class NoiseBasedChunkGeneratorMixin {
         Optional<MineralModule> mineralModule = WG2Registry.get("wg2:minerals")
             .filter(MineralModule.class::isInstance)
             .map(MineralModule.class::cast);
+        Optional<TreeModule> treeModule = WG2Registry.get("wg2:trees")
+            .filter(TreeModule.class::isInstance)
+            .map(TreeModule.class::cast);
         Optional<StructureModule> structureModule = WG2Registry.get("wg2:structures")
             .filter(StructureModule.class::isInstance)
             .map(StructureModule.class::cast);
@@ -90,28 +89,9 @@ public abstract class NoiseBasedChunkGeneratorMixin {
         mineralModule.ifPresent(module -> module.applyMineralStrataToChunk(outChunk, worldSeed));
         caveModule.ifPresent(module -> module.carveChunkCaves(outChunk, worldSeed));
         riverModule.ifPresent(module -> module.carveChunkRivers(outChunk, worldSeed));
+        treeModule.ifPresent(module -> module.applyTreesToChunk(outChunk, worldSeed));
         structureModule.ifPresent(module -> module.applyStructureAnchorsToChunk(outChunk, worldSeed));
         ruinsModule.ifPresent(module -> module.applyRuinDegradationToChunk(outChunk, worldSeed));
-    }
-
-    @Inject(method = "doFill", at = @At("HEAD"))
-    private void wg2$dispatchNoisePhase(
-            Blender blender,
-            StructureManager structureManager,
-            RandomState randomState,
-            ChunkAccess chunk,
-            int minCellY,
-            int cellHeight,
-            CallbackInfoReturnable<ChunkAccess> cir) {
-        if (!WG2Config.enabled || WG2Config.vanillaCompat) {
-            return;
-        }
-
-        long worldSeed = ((StructureManagerAccessor) structureManager).wg2$getWorldOptions().seed();
-        com.piasop.worldgen2.api.ChunkGenContext chunkContext =
-            new com.piasop.worldgen2.api.ChunkGenContext(chunk.getPos().x, chunk.getPos().z, worldSeed);
-        WG2Mod.dispatchChunkGeneration(GenerationPhase.NOISE, chunkContext);
-        WG2Mod.dispatchChunkGeneration(GenerationPhase.FEATURES, chunkContext);
     }
 
     @Inject(method = "doCreateBiomes", at = @At("HEAD"), cancellable = true)
@@ -131,7 +111,6 @@ public abstract class NoiseBasedChunkGeneratorMixin {
         WG2Mod.dispatchRegionLoad(GenerationPhase.MACRO, new RegionGenContext(Math.floorDiv(chunkX, 32), Math.floorDiv(chunkZ, 32), worldSeed));
         WG2Mod.dispatchRegionLoad(GenerationPhase.REGIONAL, new RegionGenContext(Math.floorDiv(chunkX, 8), Math.floorDiv(chunkZ, 8), worldSeed));
 
-        NoiseChunk noisechunk = chunk.getOrCreateNoiseChunk((access) -> this.createNoiseChunk(access, structureManager, blender, randomState));
         BiomeResolver vanillaResolver = BelowZeroRetrogen.getBiomeResolver(blender.getBiomeResolver(this.biomeSource), chunk);
 
         Optional<ClimateModule> climateOpt = WG2Registry.get("wg2:climate").filter(ClimateModule.class::isInstance).map(ClimateModule.class::cast);
@@ -144,20 +123,34 @@ public abstract class NoiseBasedChunkGeneratorMixin {
 
         ClimateModule climateModule = climateOpt.get();
         BiomeModule biomeModule = biomeOpt.get();
+        Holder<Biome>[] biomeLookup = new Holder[16];
+        for (int packedIndex = 0; packedIndex < biomeLookup.length; packedIndex++) {
+            ResourceLocation id = biomeModule.biomeIdFromPackedIndex(packedIndex);
+            Biome biome = ForgeRegistries.BIOMES.getValue(id);
+            if (biome != null) {
+                biomeLookup[packedIndex] = Holder.direct(biome);
+            }
+        }
+        HashMap<Long, Holder<Biome>> columnBiomeCache = new HashMap<>(64);
+
         BiomeResolver wg2Resolver = (quartX, quartY, quartZ, sampler) -> {
+            long columnKey = (((long) quartX) << 32) ^ (quartZ & 0xffffffffL);
+            Holder<Biome> cached = columnBiomeCache.get(columnKey);
+            if (cached != null) {
+                return cached;
+            }
+
             int worldX = QuartPos.toBlock(quartX);
             int worldZ = QuartPos.toBlock(quartZ);
             float temp = climateModule.sampleTemperature(worldX, worldZ, worldSeed);
             float precip = climateModule.samplePrecipitation(worldX, worldZ, worldSeed);
             float blendNoise = (float) (Math.sin(worldX * 0.011) * Math.cos(worldZ * 0.011));
 
-            String biomeId = biomeModule.chooseBiomeBlended(temp, precip, blendNoise);
-            ResourceLocation id = ResourceLocation.tryParse(biomeId);
-            if (id != null) {
-                Biome biome = ForgeRegistries.BIOMES.getValue(id);
-                if (biome != null) {
-                    return Holder.direct(biome);
-                }
+            int packedIndex = biomeModule.chooseBiomePackedIndexBlended(temp, precip, blendNoise);
+            Holder<Biome> biomeHolder = biomeLookup[packedIndex];
+            if (biomeHolder != null) {
+                columnBiomeCache.put(columnKey, biomeHolder);
+                return biomeHolder;
             }
 
             return vanillaResolver.getNoiseBiome(quartX, quartY, quartZ, sampler);

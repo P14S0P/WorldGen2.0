@@ -16,7 +16,7 @@ class TreeModuleTest {
         int expected = 32 * 32;
         assertEquals(expected, data.treeDensity().length);
         assertEquals(expected, data.prototypeIndex().length);
-        assertEquals(4, data.palette().length);
+        assertEquals(6, data.palette().length);
     }
 
     @Test
@@ -35,5 +35,21 @@ class TreeModuleTest {
         assertEquals(first.id(), second.id());
         assertTrue(first.minHeight() <= first.maxHeight());
         assertTrue(first.minCanopyRadius() <= first.maxCanopyRadius());
+    }
+
+    @Test
+    void generatedPatternUsesLSystemExpansion() {
+        TreeModule.TreePrototype prototype = module.generateRegionTrees(new RegionGenContext(0, 0, 91L)).palette()[0];
+        String pattern = module.generatePrototypePattern(prototype, 0.65f, 4.0);
+        assertTrue(pattern.length() > 8);
+        assertTrue(pattern.indexOf('F') >= 0);
+    }
+
+    @Test
+    void renderedPrototypeProducesLogsAndLeaves() {
+        TreeModule.TreePrototype prototype = module.generateRegionTrees(new RegionGenContext(0, 0, 91L)).palette()[0];
+        LSystemRenderer.RenderedTree rendered = module.renderPrototype(prototype, 0.75f, 5.0);
+        assertTrue(rendered.logs().size() > 4);
+        assertTrue(rendered.leaves().size() > 4);
     }
 }

@@ -30,7 +30,7 @@ public final class MineralModule implements WG2Module {
     private static final int STRATA_Y_STEP = 2;
     private static final float COLUMN_MIN_SIGNAL = 0.46f;
 
-    private final RuinsModule ruins = new RuinsModule();
+    private final RuinsModule fallbackRuins = new RuinsModule();
     private final ConcurrentHashMap<Long, MineralRegionData> regions = new ConcurrentHashMap<>();
 
     @Override
@@ -77,6 +77,7 @@ public final class MineralModule implements WG2Module {
         float[] deepBandBias = new float[size * size];
         byte[] layerProfile = new byte[size * size];
         MineralProfile[] palette = defaultProfiles();
+        RuinsModule ruins = resolveRuinsModule();
 
         int baseChunkX = ctx.regionX() * size;
         int baseChunkZ = ctx.regionZ() * size;
@@ -113,6 +114,13 @@ public final class MineralModule implements WG2Module {
         return data.richness()[index(localChunkX, localChunkZ, data.size())];
     }
 
+    private RuinsModule resolveRuinsModule() {
+        return WG2Registry.get("wg2:ruins")
+                .filter(RuinsModule.class::isInstance)
+                .map(RuinsModule.class::cast)
+                .orElse(fallbackRuins);
+    }
+
     public float sampleDeepBandBias(int worldX, int worldZ, long seed) {
         int chunkX = Math.floorDiv(worldX, 16);
         int chunkZ = Math.floorDiv(worldZ, 16);
@@ -139,6 +147,30 @@ public final class MineralModule implements WG2Module {
         int idx = index(localChunkX, localChunkZ, data.size());
         int paletteIdx = Byte.toUnsignedInt(data.layerProfile()[idx]);
         return data.palette()[Math.min(paletteIdx, data.palette().length - 1)];
+    }
+
+    public DepositType sampleDepositType(int worldX, int worldZ, long seed) {
+        MineralProfile profile = sampleProfile(worldX, worldZ, seed);
+        return switch (profile.id()) {
+            case "sedimentary_iron" -> DepositType.SEAM;
+            case "metamorphic_copper" -> DepositType.VEIN;
+            case "igneous_gold" -> DepositType.VEIN;
+            case "deep_crystal_mix" -> DepositType.NODULE;
+            default -> DepositType.MASSIVE;
+        };
+    }
+
+    public boolean hasDeposit(int chunkX, int chunkZ, long seed, int radiusChunks) {
+        for (int dz = -radiusChunks; dz <= radiusChunks; dz++) {
+            for (int dx = -radiusChunks; dx <= radiusChunks; dx++) {
+                int worldX = ((chunkX + dx) << 4) + 8;
+                int worldZ = ((chunkZ + dz) << 4) + 8;
+                if (sampleRichness(worldX, worldZ, seed) > 0.74f) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public void applyMineralStrataToChunk(ChunkAccess chunk, long seed) {
@@ -176,6 +208,7 @@ public final class MineralModule implements WG2Module {
                 }
                 MineralProfile profile = sampleProfile(worldX, worldZ, seed);
                 BlockState target = profileToState(profile.id());
+                DepositType depositType = sampleDepositType(worldX, worldZ, seed);
 
                 for (int y = minY; y <= maxY; y += STRATA_Y_STEP) {
                     cursor.set(worldX, y, worldZ);
@@ -190,6 +223,7 @@ public final class MineralModule implements WG2Module {
                         continue;
                     }
                     chunk.setBlockState(cursor, target, false);
+                    placeDepositOre(chunk, cursor, profile, depositType, y, selector);
                 }
             }
         }
@@ -212,6 +246,26 @@ public final class MineralModule implements WG2Module {
         double bandWeight = inPrimary ? 0.72 : 0.46;
         double gate = (richness * 0.58) + (deepBias * 0.27) + (selector * 0.15);
         return gate > (0.66 - (bandWeight * 0.08));
+    }
+
+    private void placeDepositOre(ChunkAccess chunk, BlockPos.MutableBlockPos cursor, MineralProfile profile, DepositType depositType, int y, double selector) {
+        if (selector < 0.82) {
+            return;
+        }
+
+        BlockState oreState = switch (profile.id()) {
+            case "sedimentary_iron" -> y < 0 ? Blocks.DEEPSLATE_IRON_ORE.defaultBlockState() : Blocks.IRON_ORE.defaultBlockState();
+            case "metamorphic_copper" -> y < 0 ? Blocks.DEEPSLATE_COPPER_ORE.defaultBlockState() : Blocks.COPPER_ORE.defaultBlockState();
+            case "igneous_gold" -> y < 0 ? Blocks.DEEPSLATE_GOLD_ORE.defaultBlockState() : Blocks.GOLD_ORE.defaultBlockState();
+            case "deep_crystal_mix" -> Blocks.DEEPSLATE_DIAMOND_ORE.defaultBlockState();
+            default -> Blocks.COAL_ORE.defaultBlockState();
+        };
+
+        if (depositType == DepositType.NODULE && selector < 0.93) {
+            return;
+        }
+        cursor.set(cursor.getX(), cursor.getY(), cursor.getZ());
+        chunk.setBlockState(cursor, oreState, false);
     }
 
     private static boolean isReplaceableHost(Block block) {
@@ -257,6 +311,13 @@ public final class MineralModule implements WG2Module {
 
     private static double clamp(double value, double min, double max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    public enum DepositType {
+        VEIN,
+        SEAM,
+        NODULE,
+        MASSIVE
     }
 
     public record MineralProfile(String id, int primaryMinY, int primaryMaxY, int secondaryMinY, int secondaryMaxY) {

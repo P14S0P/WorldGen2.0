@@ -21,13 +21,13 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Phase 3 ruins baseline: deterministic ruin opportunity + degradation profile.
+ * Phase 3 ruins module: deterministic degradation, collapse and sedimentation.
  */
 public final class RuinsModule implements WG2Module {
     private static final int REGION_SIZE = 32;
     private static final int SAMPLE_STEP = 8;
 
-    private final StructureModule structures = new StructureModule();
+    private final StructureModule fallbackStructures = new StructureModule();
     private final ConcurrentHashMap<Long, RuinsRegionData> regions = new ConcurrentHashMap<>();
 
     @Override
@@ -74,6 +74,7 @@ public final class RuinsModule implements WG2Module {
         float[] degradation = new float[size * size];
         byte[] archetypeIndex = new byte[size * size];
         RuinArchetype[] palette = defaultPalette();
+        StructureModule structures = resolveStructureModule();
 
         int baseChunkX = ctx.regionX() * size;
         int baseChunkZ = ctx.regionZ() * size;
@@ -108,6 +109,13 @@ public final class RuinsModule implements WG2Module {
         int localChunkX = Math.floorMod(chunkX, REGION_SIZE);
         int localChunkZ = Math.floorMod(chunkZ, REGION_SIZE);
         return data.ruinChance()[index(localChunkX, localChunkZ, data.size())];
+    }
+
+    private StructureModule resolveStructureModule() {
+        return WG2Registry.get("wg2:structures")
+                .filter(StructureModule.class::isInstance)
+                .map(StructureModule.class::cast)
+                .orElse(fallbackStructures);
     }
 
     public float sampleDegradation(int worldX, int worldZ, long seed) {
@@ -148,6 +156,7 @@ public final class RuinsModule implements WG2Module {
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
         BlockState mossy = Blocks.MOSSY_COBBLESTONE.defaultBlockState();
+        BlockState air = Blocks.AIR.defaultBlockState();
         Optional<ClimateModule> climate = WG2Registry.get("wg2:climate")
             .filter(ClimateModule.class::isInstance)
             .map(ClimateModule.class::cast);
@@ -175,12 +184,24 @@ public final class RuinsModule implements WG2Module {
                 cursor.set(worldX, targetY, worldZ);
 
                 BlockState current = chunk.getBlockState(cursor);
-                if (current.is(cobble.getBlock())) {
-                    if (degradationValue > 0.88f) {
-                        chunk.setBlockState(cursor, Blocks.AIR.defaultBlockState(), false);
-                    } else {
-                        chunk.setBlockState(cursor, mossy, false);
-                    }
+                if (!isRuinMaterial(current)) {
+                    continue;
+                }
+
+                float moisture = (float) clamp((precip - 180.0) / 900.0, 0.0, 1.0);
+                if (shouldCollapseBlock(current, degradationValue)) {
+                    chunk.setBlockState(cursor, air, false);
+                    placeDebris(chunk, worldX, targetY - 1, worldZ, current, minBuildY);
+                    placeSediment(chunk, worldX, targetY, worldZ, moisture, maxBuildY);
+                    continue;
+                }
+
+                if (current.is(cobble.getBlock()) || current.is(Blocks.STONE_BRICKS) || current.is(Blocks.DEEPSLATE_BRICKS)) {
+                    chunk.setBlockState(cursor, mossy, false);
+                }
+
+                if (shouldAddVines(degradationValue, moisture)) {
+                    placeVines(chunk, worldX, targetY + 1, worldZ, maxBuildY);
                 }
             }
         }
@@ -196,6 +217,63 @@ public final class RuinsModule implements WG2Module {
         double thermalStress = clamp(Math.abs(temperature - 18.0) / 36.0, 0.0, 1.0);
         double modifier = 0.72 + (humidity * 0.18) + (elevationStress * 0.16) + (thermalStress * 0.08);
         return (float) clamp(modifier, 0.60, 1.15);
+    }
+
+    boolean shouldCollapseBlock(BlockState state, float degradation) {
+        float weakness = collapseWeakness(state);
+        return degradation * weakness > 0.78f;
+    }
+
+    boolean shouldCollapseWithWeakness(float weakness, float degradation) {
+        return degradation * weakness > 0.78f;
+    }
+
+    boolean shouldAddVines(float degradation, float moisture) {
+        return degradation > 0.52f && moisture > 0.45f;
+    }
+
+    private boolean isRuinMaterial(BlockState state) {
+        return state.is(Blocks.COBBLESTONE)
+                || state.is(Blocks.STONE_BRICKS)
+                || state.is(Blocks.DEEPSLATE_BRICKS)
+                || state.is(Blocks.MOSSY_COBBLESTONE);
+    }
+
+    private float collapseWeakness(BlockState state) {
+        return state.is(Blocks.COBBLESTONE) ? 1.0f : state.is(Blocks.STONE_BRICKS) ? 0.8f : 0.7f;
+    }
+
+    private void placeDebris(ChunkAccess chunk, int worldX, int worldY, int worldZ, BlockState source, int minBuildY) {
+        if (worldY <= minBuildY) {
+            return;
+        }
+        BlockPos.MutableBlockPos below = new BlockPos.MutableBlockPos(worldX, worldY, worldZ);
+        if (chunk.getBlockState(below).isAir()) {
+            chunk.setBlockState(below, source.is(Blocks.DEEPSLATE_BRICKS)
+                    ? Blocks.COBBLED_DEEPSLATE.defaultBlockState()
+                    : Blocks.COBBLESTONE.defaultBlockState(), false);
+        }
+    }
+
+    private void placeSediment(ChunkAccess chunk, int worldX, int worldY, int worldZ, float moisture, int maxBuildY) {
+        if (worldY < 0 || worldY > maxBuildY) {
+            return;
+        }
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(worldX, worldY, worldZ);
+        if (!chunk.getBlockState(pos).isAir()) {
+            return;
+        }
+        chunk.setBlockState(pos, moisture > 0.42f ? Blocks.DIRT.defaultBlockState() : Blocks.SAND.defaultBlockState(), false);
+    }
+
+    private void placeVines(ChunkAccess chunk, int worldX, int worldY, int worldZ, int maxBuildY) {
+        if (worldY > maxBuildY) {
+            return;
+        }
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos(worldX, worldY, worldZ);
+        if (chunk.getBlockState(pos).isAir()) {
+            chunk.setBlockState(pos, Blocks.VINE.defaultBlockState(), false);
+        }
     }
 
     private static byte pickArchetypeIndex(float ruinChance, float degradation, int worldX, int worldZ, long seed, int paletteSize) {

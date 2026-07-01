@@ -8,6 +8,7 @@ import com.piasop.worldgen2.api.events.WG2LifecycleEvent;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,7 @@ import java.util.Optional;
  */
 public final class WG2Registry {
     private static final Map<String, WG2Module> MODULES = new LinkedHashMap<>();
+    private static final EnumMap<GenerationPhase, List<WG2Module>> MODULES_BY_PHASE = new EnumMap<>(GenerationPhase.class);
     private static boolean initialized;
 
     private WG2Registry() {
@@ -28,6 +30,7 @@ public final class WG2Registry {
             throw new IllegalStateException("Cannot register module " + module.getId() + " after initialization");
         }
         MODULES.put(module.getId(), module);
+        MODULES_BY_PHASE.clear();
     }
 
     public static Optional<WG2Module> get(String id) {
@@ -39,10 +42,15 @@ public final class WG2Registry {
     }
 
     public static List<WG2Module> byPhase(GenerationPhase phase) {
-        return MODULES.values().stream()
+        return MODULES_BY_PHASE.computeIfAbsent(phase, WG2Registry::computeByPhase);
+    }
+
+    private static List<WG2Module> computeByPhase(GenerationPhase phase) {
+        List<WG2Module> phaseModules = MODULES.values().stream()
                 .filter(module -> module.getPhase() == phase)
                 .sorted(Comparator.comparingInt(WG2Module::getPriority))
                 .toList();
+        return Collections.unmodifiableList(phaseModules);
     }
 
     public static void initializeAll(WG2Config config, WG2DataCache cache) {
@@ -114,6 +122,7 @@ public final class WG2Registry {
 
     public static void resetForTesting() {
         MODULES.clear();
+        MODULES_BY_PHASE.clear();
         initialized = false;
     }
 }

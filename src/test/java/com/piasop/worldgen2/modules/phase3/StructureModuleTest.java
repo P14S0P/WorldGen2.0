@@ -16,7 +16,7 @@ class StructureModuleTest {
         int expected = 32 * 32;
         assertEquals(expected, data.spawnChance().length);
         assertEquals(expected, data.prototypeIndex().length);
-        assertEquals(4, data.palette().length);
+        assertEquals(5, data.palette().length);
     }
 
     @Test
@@ -49,5 +49,26 @@ class StructureModuleTest {
         float highDry = module.computeContextualStructureModifier(5.0f, 180.0f, 230.0);
         assertTrue(lowlandHumid > highDry);
         assertTrue(lowlandHumid >= 0.55f && lowlandHumid <= 1.10f);
+    }
+
+    @Test
+    void structureSpawnRejectsSteepSlopes() {
+        StructureModule.StructurePrototype prototype = module.generateRegionStructures(new RegionGenContext(0, 0, 903L)).palette()[0];
+        assertTrue(!module.shouldSpawnStructure(prototype, 0, 0, 0.95f, prototype.maxSlope() + 4.0f, 77L));
+    }
+
+    @Test
+    void wfcFootprintGenerationProducesCoreTile() {
+        StructureModule.StructurePrototype prototype = module.generateRegionStructures(new RegionGenContext(0, 0, 903L)).palette()[1];
+        String[] footprint = module.generateFootprint(prototype, 0, 0, 123L);
+        assertEquals(prototype.footprintSize() * prototype.footprintSize(), footprint.length);
+        boolean hasCore = false;
+        for (String tile : footprint) {
+            if ("core".equals(tile)) {
+                hasCore = true;
+                break;
+            }
+        }
+        assertTrue(hasCore);
     }
 }
