@@ -6,7 +6,10 @@ import com.piasop.worldgen2.api.RegionGenContext;
 import com.piasop.worldgen2.api.WG2Module;
 import com.piasop.worldgen2.core.WG2Config;
 import com.piasop.worldgen2.core.WG2DataCache;
+import com.piasop.worldgen2.core.WG2Registry;
+import com.piasop.worldgen2.modules.phase1.ClimateModule;
 import com.piasop.worldgen2.modules.phase1.Phase1Noise;
+import com.piasop.worldgen2.modules.phase1.TerrainModule;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
@@ -14,6 +17,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.Heightmap;
 
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -128,14 +132,25 @@ public final class StructureModule implements WG2Module {
 
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         BlockState anchor = Blocks.COBBLESTONE.defaultBlockState();
+        Optional<ClimateModule> climate = WG2Registry.get("wg2:climate")
+            .filter(ClimateModule.class::isInstance)
+            .map(ClimateModule.class::cast);
+        Optional<TerrainModule> terrain = WG2Registry.get("wg2:terrain")
+            .filter(TerrainModule.class::isInstance)
+            .map(TerrainModule.class::cast);
 
         for (int localZ = 0; localZ < 16; localZ += SAMPLE_STEP) {
             for (int localX = 0; localX < 16; localX += SAMPLE_STEP) {
                 int worldX = baseX + localX;
                 int worldZ = baseZ + localZ;
-                float chance = sampleStructureChance(worldX, worldZ, seed);
+            float chance = sampleStructureChance(worldX, worldZ, seed);
+            float temp = climate.map(c -> c.sampleTemperature(worldX, worldZ, seed)).orElse(14.0f);
+            float precip = climate.map(c -> c.samplePrecipitation(worldX, worldZ, seed)).orElse(500.0f);
+            double elevation = terrain.map(t -> t.sampleHeight(worldX, worldZ, seed)).orElse(90.0);
+            float contextual = computeContextualStructureModifier(temp, precip, elevation);
+            float tunedChance = (float) clamp(chance * contextual, 0.0, 1.0);
                 double jitter = (Phase1Noise.value2D(worldX * 0.021, worldZ * 0.021, seed + 31847L) + 1.0) * 0.5;
-                if (!shouldPlaceAnchor(chance, jitter)) {
+            if (!shouldPlaceAnchor(tunedChance, jitter)) {
                     continue;
                 }
 
@@ -148,7 +163,7 @@ public final class StructureModule implements WG2Module {
                 }
                 chunk.setBlockState(cursor, anchor, false);
 
-                if (chance > 0.96f) {
+                if (tunedChance > 0.97f) {
                     cursor.set(worldX, placeY + 1, worldZ);
                     if (chunk.getBlockState(cursor).isAir()) {
                         chunk.setBlockState(cursor, anchor, false);
@@ -156,6 +171,14 @@ public final class StructureModule implements WG2Module {
                 }
             }
         }
+    }
+
+    float computeContextualStructureModifier(float temperature, float precipitation, double elevation) {
+        double hydro = clamp((precipitation - 220.0) / 900.0, 0.0, 1.0);
+        double thermal = 1.0 - clamp(Math.abs(temperature - 14.0) / 40.0, 0.0, 1.0);
+        double elevationPenalty = clamp((elevation - 130.0) / 180.0, 0.0, 1.0);
+        double modifier = 0.70 + (hydro * 0.22) + (thermal * 0.12) - (elevationPenalty * 0.24);
+        return (float) clamp(modifier, 0.55, 1.10);
     }
 
     boolean shouldPlaceAnchor(float chance, double jitter) {

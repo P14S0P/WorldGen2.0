@@ -6,7 +6,10 @@ import com.piasop.worldgen2.api.RegionGenContext;
 import com.piasop.worldgen2.api.WG2Module;
 import com.piasop.worldgen2.core.WG2Config;
 import com.piasop.worldgen2.core.WG2DataCache;
+import com.piasop.worldgen2.core.WG2Registry;
+import com.piasop.worldgen2.modules.phase1.ClimateModule;
 import com.piasop.worldgen2.modules.phase1.Phase1Noise;
+import com.piasop.worldgen2.modules.phase1.TerrainModule;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
@@ -14,6 +17,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -151,13 +155,23 @@ public final class MineralModule implements WG2Module {
         }
 
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        Optional<TerrainModule> terrain = WG2Registry.get("wg2:terrain")
+                .filter(TerrainModule.class::isInstance)
+                .map(TerrainModule.class::cast);
+        Optional<ClimateModule> climate = WG2Registry.get("wg2:climate")
+                .filter(ClimateModule.class::isInstance)
+                .map(ClimateModule.class::cast);
         for (int localZ = 0; localZ < 16; localZ++) {
             for (int localX = 0; localX < 16; localX++) {
                 int worldX = baseX + localX;
                 int worldZ = baseZ + localZ;
                 float richness = sampleRichness(worldX, worldZ, seed);
                 float deepBias = sampleDeepBandBias(worldX, worldZ, seed);
-                if (((richness * 0.65f) + (deepBias * 0.35f)) < COLUMN_MIN_SIGNAL) {
+                double elevation = terrain.map(t -> t.sampleHeight(worldX, worldZ, seed)).orElse(90.0);
+                float temperature = climate.map(c -> c.sampleTemperature(worldX, worldZ, seed)).orElse(14.0f);
+                float contextual = computeContextualMineralModifier(elevation, temperature);
+                float tunedRichness = (float) clamp(richness * contextual, 0.0, 1.0);
+                if (((tunedRichness * 0.65f) + (deepBias * 0.35f)) < COLUMN_MIN_SIGNAL) {
                     continue;
                 }
                 MineralProfile profile = sampleProfile(worldX, worldZ, seed);
@@ -172,13 +186,20 @@ public final class MineralModule implements WG2Module {
 
                     double selector = (Phase1Noise.value2D(worldX * 0.032, (y * 0.041) + (worldZ * 0.017),
                             seed + 30757L) + 1.0) * 0.5;
-                    if (!shouldApplyStrataAt(y, profile, richness, deepBias, selector)) {
+                    if (!shouldApplyStrataAt(y, profile, tunedRichness, deepBias, selector)) {
                         continue;
                     }
                     chunk.setBlockState(cursor, target, false);
                 }
             }
         }
+    }
+
+    float computeContextualMineralModifier(double elevation, float temperature) {
+        double uplift = clamp((elevation - 95.0) / 170.0, 0.0, 1.0);
+        double coldness = clamp((10.0 - temperature) / 30.0, 0.0, 1.0);
+        double modifier = 0.85 + (uplift * 0.30) + (coldness * 0.10);
+        return (float) clamp(modifier, 0.70, 1.25);
     }
 
     boolean shouldApplyStrataAt(int y, MineralProfile profile, float richness, float deepBias, double selector) {

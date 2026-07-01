@@ -48,4 +48,12 @@ class RuinsModuleTest {
         assertTrue(!module.shouldApplyDegradation(0.50f, 0.90f));
         assertTrue(!module.shouldApplyDegradation(0.90f, 0.30f));
     }
+
+    @Test
+    void contextualRuinModifierIncreasesWithStressAndHumidity() {
+        float mild = module.computeContextualRuinModifier(20.0f, 220.0f, 95.0);
+        float stressed = module.computeContextualRuinModifier(-2.0f, 980.0f, 260.0);
+        assertTrue(stressed > mild);
+        assertTrue(stressed >= 0.60f && stressed <= 1.15f);
+    }
 }

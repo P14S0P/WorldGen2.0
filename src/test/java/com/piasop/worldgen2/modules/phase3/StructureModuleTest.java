@@ -42,4 +42,12 @@ class StructureModuleTest {
         assertTrue(module.shouldPlaceAnchor(0.93f, 0.95));
         assertTrue(!module.shouldPlaceAnchor(0.60f, 0.2));
     }
+
+    @Test
+    void contextualModifierPrefersHumidLowlandsOverHighDryAreas() {
+        float lowlandHumid = module.computeContextualStructureModifier(18.0f, 900.0f, 85.0);
+        float highDry = module.computeContextualStructureModifier(5.0f, 180.0f, 230.0);
+        assertTrue(lowlandHumid > highDry);
+        assertTrue(lowlandHumid >= 0.55f && lowlandHumid <= 1.10f);
+    }
 }

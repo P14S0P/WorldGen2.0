@@ -26,6 +26,10 @@ Ultima actualizacion: 2026-06-30
 - [x] Primer efecto NOISE en runtime para minerales (estratos ligeros deterministas)
 - [x] Ajuste inicial de balance/performance Fase 3 (menor densidad y menor costo por chunk)
 
+## Alcance de completitud
+- Fase 3 actual esta en estado `baseline funcional`.
+- Los items de README que exigen implementacion completa (L-Systems/WFC/degradation pipeline geologico completo) siguen pendientes.
+
 ## Modulo actual en desarrollo
 - Ajuste fino por bioma y perfil geologico — fase: pendiente
 
@@ -42,11 +46,21 @@ Ultima actualizacion: 2026-06-30
 - src/main/java/com/piasop/worldgen2/modules/phase2/CaveModule.java
 - src/main/java/com/piasop/worldgen2/modules/phase2/RiverModule.java
 - src/main/java/com/piasop/worldgen2/modules/phase2/OceanModule.java
+- src/main/java/com/piasop/worldgen2/modules/phase3/VegetationModule.java
+- src/main/java/com/piasop/worldgen2/modules/phase3/TreeModule.java
+- src/main/java/com/piasop/worldgen2/modules/phase3/StructureModule.java
+- src/main/java/com/piasop/worldgen2/modules/phase3/RuinsModule.java
+- src/main/java/com/piasop/worldgen2/modules/phase3/MineralModule.java
 - src/test/java/com/piasop/worldgen2/modules/phase1/Phase1BenchmarkTest.java
 - src/test/java/com/piasop/worldgen2/modules/phase2/CaveModuleTest.java
 - src/test/java/com/piasop/worldgen2/modules/phase2/RiverModuleTest.java
 - src/test/java/com/piasop/worldgen2/modules/phase2/OceanModuleTest.java
 - src/test/java/com/piasop/worldgen2/modules/phase2/RiverOceanIntegrationTest.java
+- src/test/java/com/piasop/worldgen2/modules/phase3/VegetationModuleTest.java
+- src/test/java/com/piasop/worldgen2/modules/phase3/TreeModuleTest.java
+- src/test/java/com/piasop/worldgen2/modules/phase3/StructureModuleTest.java
+- src/test/java/com/piasop/worldgen2/modules/phase3/RuinsModuleTest.java
+- src/test/java/com/piasop/worldgen2/modules/phase3/MineralModuleTest.java
 
 ## Bugs conocidos
 - Sin bugs criticos bloqueantes reportados en Fase 2 tras hardening final

@@ -49,4 +49,12 @@ class MineralModuleTest {
         assertTrue(!module.shouldApplyStrataAt(90, profile, 0.95f, 0.90f, 0.9));
         assertTrue(!module.shouldApplyStrataAt(0, profile, 0.20f, 0.10f, 0.1));
     }
+
+    @Test
+    void contextualMineralModifierBoostsUpliftedAndColdRegions() {
+        float plainsWarm = module.computeContextualMineralModifier(90.0, 20.0f);
+        float mountainsCold = module.computeContextualMineralModifier(260.0, -6.0f);
+        assertTrue(mountainsCold > plainsWarm);
+        assertTrue(mountainsCold >= 0.70f && mountainsCold <= 1.25f);
+    }
 }

@@ -234,12 +234,19 @@
 - Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest --tests com.piasop.worldgen2.modules.phase3.MineralModuleTest --tests com.piasop.worldgen2.core.WG2ModDispatchTest` exitoso
 - Verificacion tecnica ✓ - `./gradlew build` exitoso
 - Verificacion tecnica ✓ - `./gradlew runClient` exitoso (mundo carga, handshake OK, guardado/cierre limpio)
+- README.md + WG2_STATE.md ✓ - alineacion de completitud (baseline funcional vs implementacion completa de especificacion)
+- StructureModule.java ✓ - tuning contextual por clima/relieve para placement runtime
+- RuinsModule.java ✓ - tuning contextual por clima/relieve para degradacion runtime
+- MineralModule.java ✓ - tuning contextual por relieve/temperatura para estratos runtime
+- StructureModuleTest.java + RuinsModuleTest.java + MineralModuleTest.java ✓ - cobertura de modificadores contextuales
+- Verificacion tecnica ✓ - `./gradlew test --tests com.piasop.worldgen2.modules.phase3.StructureModuleTest --tests com.piasop.worldgen2.modules.phase3.RuinsModuleTest --tests com.piasop.worldgen2.modules.phase3.MineralModuleTest --tests com.piasop.worldgen2.core.WG2ModDispatchTest` exitoso
+- Verificacion tecnica ✓ - `./gradlew build` exitoso
 
 ### Pendiente:
-- Continuar Fase 3 con ajuste fino por bioma/perfil geologico
+- Ejecutar validacion visual final en cliente (runClient) del tuning contextual
 
 ### Bugs conocidos:
 - Sin bloqueantes funcionales; performance sigue siendo el principal foco de mejora
 
 ### Proximo objetivo:
-- Introducir tuning contextual por bioma/relieve y revalidar runtime
+- Si validacion visual es correcta: consolidar commit + push

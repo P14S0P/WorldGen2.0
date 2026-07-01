@@ -6,7 +6,10 @@ import com.piasop.worldgen2.api.RegionGenContext;
 import com.piasop.worldgen2.api.WG2Module;
 import com.piasop.worldgen2.core.WG2Config;
 import com.piasop.worldgen2.core.WG2DataCache;
+import com.piasop.worldgen2.core.WG2Registry;
+import com.piasop.worldgen2.modules.phase1.ClimateModule;
 import com.piasop.worldgen2.modules.phase1.Phase1Noise;
+import com.piasop.worldgen2.modules.phase1.TerrainModule;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
@@ -14,6 +17,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.Heightmap;
 
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -144,6 +148,12 @@ public final class RuinsModule implements WG2Module {
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         BlockState cobble = Blocks.COBBLESTONE.defaultBlockState();
         BlockState mossy = Blocks.MOSSY_COBBLESTONE.defaultBlockState();
+        Optional<ClimateModule> climate = WG2Registry.get("wg2:climate")
+            .filter(ClimateModule.class::isInstance)
+            .map(ClimateModule.class::cast);
+        Optional<TerrainModule> terrain = WG2Registry.get("wg2:terrain")
+            .filter(TerrainModule.class::isInstance)
+            .map(TerrainModule.class::cast);
 
         for (int localZ = 0; localZ < 16; localZ += SAMPLE_STEP) {
             for (int localX = 0; localX < 16; localX += SAMPLE_STEP) {
@@ -151,7 +161,12 @@ public final class RuinsModule implements WG2Module {
                 int worldZ = baseZ + localZ;
                 float chance = sampleRuinChance(worldX, worldZ, seed);
                 float degradationValue = sampleDegradation(worldX, worldZ, seed);
-                if (!shouldApplyDegradation(chance, degradationValue)) {
+            float temp = climate.map(c -> c.sampleTemperature(worldX, worldZ, seed)).orElse(14.0f);
+            float precip = climate.map(c -> c.samplePrecipitation(worldX, worldZ, seed)).orElse(500.0f);
+            double elevation = terrain.map(t -> t.sampleHeight(worldX, worldZ, seed)).orElse(90.0);
+            float contextual = computeContextualRuinModifier(temp, precip, elevation);
+            float tunedChance = (float) clamp(chance * contextual, 0.0, 1.0);
+            if (!shouldApplyDegradation(tunedChance, degradationValue)) {
                     continue;
                 }
 
@@ -173,6 +188,14 @@ public final class RuinsModule implements WG2Module {
 
     boolean shouldApplyDegradation(float ruinChance, float degradation) {
         return ruinChance > 0.80f && degradation > 0.62f;
+    }
+
+    float computeContextualRuinModifier(float temperature, float precipitation, double elevation) {
+        double humidity = clamp((precipitation - 180.0) / 1000.0, 0.0, 1.0);
+        double elevationStress = clamp((elevation - 140.0) / 170.0, 0.0, 1.0);
+        double thermalStress = clamp(Math.abs(temperature - 18.0) / 36.0, 0.0, 1.0);
+        double modifier = 0.72 + (humidity * 0.18) + (elevationStress * 0.16) + (thermalStress * 0.08);
+        return (float) clamp(modifier, 0.60, 1.15);
     }
 
     private static byte pickArchetypeIndex(float ruinChance, float degradation, int worldX, int worldZ, long seed, int paletteSize) {
